@@ -97,18 +97,6 @@ impl FromStr for Message {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RoomDataMessage {
-    pub room_data: RoomData,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthenticatedMessage {
-    pub session_id: SessionId,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RoomData {
     pub id: String,
     pub host: PlayerInfo,

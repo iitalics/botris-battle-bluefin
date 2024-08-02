@@ -38,6 +38,8 @@ async fn main() -> Result<()> {
 
     let (mut ws, _res) = ws_connect_async(&uri).await.context("connect error")?;
 
+    println!("{}", botris::GameInfo::default());
+
     use std::time::Instant;
     let t0 = Instant::now();
 
