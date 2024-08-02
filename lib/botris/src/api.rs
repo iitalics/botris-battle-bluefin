@@ -76,12 +76,15 @@ pub enum Message {
     HostChanged {/* payload unimplemented */},
     Error(String),
     #[serde(untagged)]
-    Other {
-        #[serde(rename = "type")]
-        type_: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        payload: Option<serde_json::Value>,
-    },
+    Other(UnknownMessage),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnknownMessage {
+    #[serde(rename = "type")]
+    pub type_: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<serde_json::Value>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -89,6 +92,13 @@ pub enum Message {
 pub struct MessageFromStrError(serde_json::Error);
 
 impl FromStr for Message {
+    type Err = MessageFromStrError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s).map_err(MessageFromStrError)
+    }
+}
+
+impl FromStr for UnknownMessage {
     type Err = MessageFromStrError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(s).map_err(MessageFromStrError)
@@ -152,7 +162,28 @@ pub struct GameState {
     pub dead: bool,
 }
 
-pub type Board = Vec<[Block; 10]>;
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Board(pub Vec<[Block; 10]>);
+
+impl AsRef<[[Block; 10]]> for Board {
+    fn as_ref(&self) -> &[[Block; 10]] {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn row_to_string(bs: &[Block]) -> String {
+            bs.iter().map(|b| b.map_or("_", |b| b.name())).collect()
+        }
+
+        f.debug_list()
+            .entries(self.0.iter().map(|bs| row_to_string(bs)))
+            .finish()
+    }
+}
+
 pub type Queue = Vec<Piece>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -295,6 +326,34 @@ impl std::fmt::Display for Rotation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", content = "payload", rename_all = "snake_case")]
+pub enum ClientMessage<'a> {
+    #[serde(rename_all = "camelCase")]
+    Action { commands: &'a [Command] },
+}
+
+impl std::fmt::Display for ClientMessage<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        serde_json::to_string(self)
+            .map_err(|_| std::fmt::Error)
+            .and_then(|s| f.write_str(&s))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[repr(u8)]
+pub enum Command {
+    Hold = b'h',
+    MoveLeft = b'<',
+    MoveRight = b'>',
+    RotateCw = b'[',
+    RotateCcw = b']',
+    Drop = b'v',
+    SonicDrop = b'.',
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
