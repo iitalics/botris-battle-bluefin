@@ -1,7 +1,7 @@
 //! Standard implementation of tetris pieces.
 
-use super::piece::Cells;
-pub use super::piece::{Pos, Rot, Shape, Spawn};
+use super::piece::{Cells, Rot, Turn};
+use super::piece::{Shape, Spawn, WallKicks};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(u8)]
@@ -35,15 +35,15 @@ pub type Piece = super::piece::Piece<PieceType>;
 // ....OO.... 19
 // 0123456789
 
-// static SPAWN_X: [i8; 7] = [3, 3, 3, 4, 3, 3, 3]; // IJLOSTZ
-// const SPAWN_Y: i8 = 20;
+const SPAWN_2: (i8, i8) = (10 / 2 - 2 / 2, 20);
+const SPAWN_3_4: (i8, i8) = (10 / 2 - 4 / 2, 20);
 
 impl Spawn for PieceType {
     fn spawn(&self) -> (i8, i8) {
         if *self == PieceType::O {
-            (4, 20)
+            SPAWN_2
         } else {
-            (3, 20)
+            SPAWN_3_4
         }
     }
 }
@@ -120,9 +120,60 @@ impl Shape for PieceType {
     }
 }
 
+static WALLKICKS: [[[(i8, i8); 5]; 2]; 4] = [
+    [
+        /* 0-1 */ [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+        /* 0-3 */ [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+    ],
+    [
+        /* 1-2 */ [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+        /* 1-0 */ [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+    ],
+    [
+        /* 2-3 */ [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+        /* 2-1 */ [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+    ],
+    [
+        /* 3-0 */ [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+        /* 3-2 */ [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+    ],
+];
+
+static I_WALLKICKS: [[[(i8, i8); 5]; 2]; 4] = [
+    [
+        /* 0-1 */ [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
+        /* 0-3 */ [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
+    ],
+    [
+        /* 1-2 */ [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
+        /* 1-0 */ [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
+    ],
+    [
+        /* 2-3 */ [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
+        /* 2-1 */ [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)],
+    ],
+    [
+        /* 3-0 */ [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)],
+        /* 3-2 */ [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
+    ],
+];
+
+impl WallKicks for PieceType {
+    fn wall_kicks(&self, r: Rot, dr: Turn) -> &'static [(i8, i8)] {
+        let i = r as usize;
+        let j = (dr as usize & 3) >> 1; // Cw => 0, Ccw => 1
+        if *self == PieceType::I {
+            &I_WALLKICKS[i][j]
+        } else {
+            &WALLKICKS[i][j]
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::piece::Pos;
     use std::format;
 
     fn assert_same_set<T, XS, YS>(xs: XS, ys: YS, why: &str)
@@ -204,5 +255,32 @@ mod test {
         assert_cells(Z, 3, 20, Rot::W, [(3, 19), (3, 18), (4, 20), (4, 19)]);
         assert_eq!(cells(Z, 3, 20, Rot::N), cells(Z, 3, 21, Rot::S));
         assert_eq!(cells(Z, 3, 20, Rot::E), cells(Z, 4, 20, Rot::W));
+    }
+
+    #[test]
+    fn test_spawn() {
+        assert_eq!(Piece::spawn(PieceType::I).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(PieceType::J).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(PieceType::L).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(PieceType::O).pos, Pos::from((4, 20, Rot::N)));
+        assert_eq!(Piece::spawn(PieceType::S).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(PieceType::T).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(PieceType::Z).pos, Pos::from((3, 20, Rot::N)));
+    }
+
+    #[test]
+    fn test_wall_kick_lookup() {
+        assert_eq!(
+            PieceType::Z.wall_kicks(Rot::N, Turn::Cw),
+            [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)]
+        );
+        assert_eq!(
+            PieceType::J.wall_kicks(Rot::S, Turn::Ccw),
+            [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+        );
+        assert_eq!(
+            PieceType::I.wall_kicks(Rot::E, Turn::Ccw),
+            [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
+        );
     }
 }
