@@ -161,7 +161,7 @@ static I_WALLKICKS: [[[(i8, i8); 5]; 2]; 4] = [
 impl WallKicks for PieceType {
     fn wall_kicks(&self, r: Rot, dr: Turn) -> &'static [(i8, i8)] {
         let i = r as usize;
-        let j = (dr as usize & 3) >> 1; // Cw => 0, Ccw => 1
+        let j = (dr as usize) >> 1; // Cw => 0, Ccw => 1
         if *self == PieceType::I {
             &I_WALLKICKS[i][j]
         } else {
