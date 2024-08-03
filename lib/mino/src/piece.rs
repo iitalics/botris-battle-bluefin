@@ -4,6 +4,7 @@
 use core::fmt;
 use core::mem::transmute;
 use core::ops::Range;
+use core::{ops, str};
 
 use crate::matrix::{Mat, MatBuf};
 
@@ -46,18 +47,6 @@ pub enum Rot {
     S = 2,
     /// One CCW rotation, or three CW rotations.
     W = 3,
-}
-
-impl Rot {
-    #[inline]
-    pub fn cw(self) -> Self {
-        u8::from(self).wrapping_add(1).into()
-    }
-
-    #[inline]
-    pub fn ccw(self) -> Self {
-        u8::from(self).wrapping_add(3).into()
-    }
 }
 
 impl From<u8> for Rot {
@@ -222,7 +211,7 @@ impl fmt::Debug for Cells {
                             bs[x] = b'x';
                         }
                     }
-                    let s = core::str::from_utf8(&bs[..self.w]).unwrap();
+                    let s = str::from_utf8(&bs[..self.w]).unwrap();
                     f.entry(&s);
                 }
                 f.finish()
@@ -248,5 +237,76 @@ impl<T: Shape> Piece<T> {
     /// Get the cells occupied by the piece.
     pub fn cells(&self) -> Cells {
         self.shape.cells(self.pos.r).offset(self.pos.x, self.pos.y)
+    }
+
+    /// Try to move in the given direction. If there is no collision, returns
+    /// `Some(final_cells)` and shifts the piece. If there is a collision, returns `None`
+    /// and leaves the piece unmodified.
+    pub fn try_shift(&mut self, mat: &Mat, dx: Dir) -> Option<Cells> {
+        let r = self.pos.r;
+        let x = self.pos.x + dx;
+        let y = self.pos.y;
+        let cells = self.shape.cells(r).offset(x, y);
+
+        if !cells.collides(mat) {
+            self.pos.x = x;
+            return Some(cells);
+        }
+
+        None
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Dir {
+    Left = -1,
+    Right = 1,
+}
+
+impl ops::Add<Dir> for i8 {
+    type Output = i8;
+    fn add(self, rhs: Dir) -> i8 {
+        self + rhs as i8
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Turn {
+    Cw = 1,
+    Ccw = 3,
+}
+
+impl ops::Add<Turn> for Rot {
+    type Output = Rot;
+    fn add(self, t: Turn) -> Self::Output {
+        (self as u8 + t as u8).into()
+    }
+}
+
+pub trait WallKicks: Shape {
+    fn wall_kicks(&self, r: Rot, dr: Turn) -> &'static [(i8, i8)];
+}
+
+impl<T: WallKicks> Piece<T> {
+    /// Try to rotate in the given direction. If there is no collision (applying the wall
+    /// kicks), returns `Some(final_cells)` and rotates the piece. If there is a
+    /// collision, returns `None` and leaves the piece unmodified.
+    pub fn try_rotate(&mut self, mat: &Mat, dr: Turn) -> Option<Cells> {
+        let r = self.pos.r;
+        let x = self.pos.x;
+        let y = self.pos.y;
+        let cells = self.shape.cells(r).offset(x, y);
+
+        for &(dx, dy) in self.shape.wall_kicks(r, dr) {
+            let cells = cells.offset(dx, dy);
+            if !cells.collides(mat) {
+                self.pos.x += dx;
+                self.pos.y += dy;
+                self.pos.r = r + dr;
+                return Some(cells);
+            }
+        }
+
+        None
     }
 }
