@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use crate::game::{Board, Piece, PieceData, Queue};
+use crate::game::{Board, Command, Piece, PieceData, Queue};
 
 pub type SessionId = String;
 
@@ -177,19 +177,6 @@ impl std::fmt::Display for ClientMessage<'_> {
             .map_err(|_| std::fmt::Error)
             .and_then(|s| f.write_str(&s))
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[repr(u8)]
-pub enum Command {
-    Hold = b'h',
-    MoveLeft = b'<',
-    MoveRight = b'>',
-    RotateCw = b'[',
-    RotateCcw = b']',
-    Drop = b'v',
-    SonicDrop = b'.',
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
