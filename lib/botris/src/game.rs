@@ -109,12 +109,40 @@ impl PieceData {
         }
     }
 
-    pub fn hard_drop(mut self, board: &Board) -> Self {
-        const DROP: (i8, i8) = (0, -1);
-        while !board.check_collision(self.offset(DROP)) {
-            self = self.offset(DROP);
+    pub fn rotate(self, r: Rotation) -> Self {
+        Self {
+            rotation: r,
+            ..self
         }
-        self
+    }
+
+    pub fn try_rotate_cw(self, board: &Board) -> Option<Self> {
+        self.try_rotate(self.rotation.cw(), board)
+    }
+
+    pub fn try_rotate_ccw(self, board: &Board) -> Option<Self> {
+        self.try_rotate(self.rotation.cw(), board)
+    }
+
+    fn try_rotate(self, new_r: Rotation, board: &Board) -> Option<Self> {
+        let old_r = self.rotation;
+        for ofs in self.piece.wall_kicks(old_r, new_r) {
+            let kick = self.rotate(new_r).offset(ofs);
+            if !board.check_collision(kick) {
+                return Some(kick);
+            }
+        }
+        None
+    }
+
+    pub fn hard_drop(mut self, board: &Board) -> Self {
+        loop {
+            let drop = self.offset((0, -1));
+            if board.check_collision(drop) {
+                return self;
+            }
+            self = drop;
+        }
     }
 
     pub fn coords(self) -> impl Iterator<Item = (i8, i8)> {
@@ -160,7 +188,35 @@ impl Piece {
             Piece::Z => &[(0, 0), (1, 0), (1, 1), (2, 1)],
             Piece::T => &[(0, 1), (1, 0), (1, 1), (2, 1)],
         }
-        .into_iter()
+        .iter()
+        .copied()
+    }
+
+    fn wall_kicks(self, r0: Rotation, r1: Rotation) -> impl Iterator<Item = (i8, i8)> {
+        if self == Piece::I {
+            match (r0 as u8, r1 as u8) {
+                (0, 1) => &[(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
+                (1, 0) => &[(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
+                (1, 2) => &[(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
+                (2, 1) => &[(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)],
+                (2, 3) => &[(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
+                (3, 2) => &[(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
+                (3, 0) => &[(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)],
+                (_, _) => &[(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
+            }
+        } else {
+            match (r0 as u8, r1 as u8) {
+                (0, 1) => &[(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+                (1, 0) => &[(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+                (1, 2) => &[(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+                (2, 1) => &[(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+                (2, 3) => &[(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+                (3, 2) => &[(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+                (3, 0) => &[(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+                (_, _) => &[(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+            }
+        }
+        .iter()
         .copied()
     }
 }
