@@ -167,7 +167,14 @@ async fn main() -> Result<()> {
 
                 session.room_data.players = players;
 
-                let commands = &[Command::MoveLeft];
+                let commands = &[
+                    Command::MoveLeft,
+                    Command::RotateCw,
+                    Command::RotateCcw,
+                    Command::RotateCcw,
+                    Command::MoveRight,
+                    Command::RotateCw,
+                ];
                 let cmsg = ClientMessage::Action { commands };
                 debug!("< {cmsg}");
                 let ws_cmsg = tungstenite::Message::text(cmsg.to_string());
@@ -178,6 +185,7 @@ async fn main() -> Result<()> {
                 for &cmd in commands {
                     piece = cmd.apply(piece, &game_state.board).unwrap_or(piece);
                 }
+                piece = piece.sonic_drop(&game_state.board);
                 expected_board.place_piece(piece);
 
                 session.expected_board = Some(expected_board);
