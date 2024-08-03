@@ -89,7 +89,6 @@ impl Deref for MatBuf {
 
 #[cfg(test)]
 mod test {
-    extern crate std;
     use super::*;
 
     #[test]

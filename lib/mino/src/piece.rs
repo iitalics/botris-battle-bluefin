@@ -1,12 +1,14 @@
 //! Piece abstraction. This module does not specify the actual shapes for the pieces or
 //! their wall kicks.
 
+use core::fmt;
 use core::mem::transmute;
 use core::ops::Range;
 
 use crate::matrix::{Mat, MatBuf};
 
 /// Represents the position of a shape. This includes the rotation state.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pos {
     pub x: i8,
     pub y: i8,
@@ -17,6 +19,18 @@ impl From<(i8, i8)> for Pos {
     fn from((x, y): (i8, i8)) -> Self {
         let r = Rot::default();
         Pos { x, y, r }
+    }
+}
+
+impl From<(i8, i8, Rot)> for Pos {
+    fn from((x, y, r): (i8, i8, Rot)) -> Self {
+        Pos { x, y, r }
+    }
+}
+
+impl fmt::Debug for Pos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (self.x, self.y, self.r).fmt(f)
     }
 }
 
@@ -61,9 +75,21 @@ impl From<Rot> for u8 {
 }
 
 /// Represents the state of a piece (its shape and position).
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Piece<T> {
     pub shape: T,
     pub pos: Pos,
+}
+
+impl<T: fmt::Debug> fmt::Debug for Piece<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Piece")
+            .field(&self.shape)
+            .field(&self.pos.x)
+            .field(&self.pos.y)
+            .field(&self.pos.r)
+            .finish()
+    }
 }
 
 /// Abstraction for determining spawn locations.
@@ -109,7 +135,7 @@ impl Cells {
         }
     }
 
-    pub const fn offset(&self, x: i8, y: i8) -> Self {
+    pub fn offset(&self, x: i8, y: i8) -> Self {
         Self {
             bits: self.bits,
             /* wrapping is technically buggy but i'm going to cross my fingers and hope
@@ -119,6 +145,23 @@ impl Cells {
             y0: self.y0.wrapping_add(y),
             y1: self.y1.wrapping_add(y),
         }
+    }
+
+    pub fn extents(&self) -> (Range<i8>, Range<i8>) {
+        (self.x0..self.x1, self.y0..self.y1)
+    }
+
+    pub fn coords(&self) -> impl Iterator<Item = (i8, i8)> {
+        let x0 = self.x0;
+        let y0 = self.y0;
+        let bits = self.bits;
+        (0..16i8)
+            .filter(move |i| bits & (1 << i) != 0)
+            .map(move |i| {
+                let x = i % 4;
+                let y = i / 4;
+                (x0 + x, y0 + y)
+            })
     }
 
     pub fn collides(&self, mat: &Mat) -> bool {
@@ -159,6 +202,45 @@ impl Cells {
             mat.set(y, mask);
             bits >>= 4;
         }
+    }
+}
+
+impl fmt::Debug for Cells {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct DebugCoords {
+            w: usize,
+            h: usize,
+            bits: u16,
+        }
+        impl fmt::Debug for DebugCoords {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let mut f = f.debug_list();
+                for y in 0..self.h {
+                    let mut bs = [b'.'; 4];
+                    for x in 0..self.w {
+                        if self.bits & (1 << (y * 4 + x)) != 0 {
+                            bs[x] = b'x';
+                        }
+                    }
+                    let s = core::str::from_utf8(&bs[..self.w]).unwrap();
+                    f.entry(&s);
+                }
+                f.finish()
+            }
+        }
+
+        let (xs, ys) = self.extents();
+        let coords = DebugCoords {
+            w: xs.len(),
+            h: ys.len(),
+            bits: self.bits,
+        };
+
+        f.debug_tuple("Cells")
+            .field(&xs)
+            .field(&ys)
+            .field(&coords)
+            .finish()
     }
 }
 
