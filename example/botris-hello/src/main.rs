@@ -174,12 +174,12 @@ async fn main() -> Result<()> {
                 ws.send(ws_cmsg).await.context("send error")?;
 
                 let mut expected_board = game_state.board.clone();
-                expected_board.place_piece(
-                    game_state
-                        .current
-                        .offset((-1, 0))
-                        .hard_drop(&game_state.board),
-                );
+                let mut piece = game_state.current;
+                for &cmd in commands {
+                    piece = cmd.apply(piece, &game_state.board).unwrap_or(piece);
+                }
+                expected_board.place_piece(piece);
+
                 session.expected_board = Some(expected_board);
             }
 

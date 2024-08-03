@@ -116,6 +116,14 @@ impl PieceData {
         }
     }
 
+    pub fn try_offset(self, ofs: (i8, i8), board: &Board) -> Option<Self> {
+        let moved = self.offset(ofs);
+        if !board.check_collision(moved) {
+            return Some(moved);
+        }
+        None
+    }
+
     pub fn try_rotate_cw(self, board: &Board) -> Option<Self> {
         self.try_rotate(self.rotation.cw(), board)
     }
@@ -127,15 +135,15 @@ impl PieceData {
     fn try_rotate(self, new_r: Rotation, board: &Board) -> Option<Self> {
         let old_r = self.rotation;
         for ofs in self.piece.wall_kicks(old_r, new_r) {
-            let kick = self.rotate(new_r).offset(ofs);
-            if !board.check_collision(kick) {
-                return Some(kick);
+            let kicked = self.rotate(new_r).offset(ofs);
+            if !board.check_collision(kicked) {
+                return Some(kicked);
             }
         }
         None
     }
 
-    pub fn hard_drop(mut self, board: &Board) -> Self {
+    pub fn sonic_drop(mut self, board: &Board) -> Self {
         loop {
             let drop = self.offset((0, -1));
             if board.check_collision(drop) {
@@ -350,7 +358,7 @@ impl std::fmt::Display for Rotation {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(u8)]
 pub enum Command {
@@ -361,4 +369,21 @@ pub enum Command {
     RotateCcw,
     Drop,
     SonicDrop,
+}
+
+impl Command {
+    pub fn apply(self, piece: PieceData, board: &Board) -> Option<PieceData> {
+        match self {
+            Command::Hold => {
+                /* queue isn't implemented */
+                None
+            }
+            Command::MoveLeft => piece.try_offset((-1, 0), board),
+            Command::MoveRight => piece.try_offset((1, 0), board),
+            Command::Drop => piece.try_offset((0, -1), board),
+            Command::RotateCw => piece.try_rotate_cw(board),
+            Command::RotateCcw => piece.try_rotate_ccw(board),
+            Command::SonicDrop => Some(piece.sonic_drop(board)),
+        }
+    }
 }
