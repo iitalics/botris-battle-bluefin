@@ -155,7 +155,6 @@ pub struct GameState {
     pub held: Option<Piece>,
     pub can_hold: bool,
     pub current: PieceData,
-    pub is_immobile: bool,
     pub combo: u32,
     pub b2b: bool,
     pub score: u32,
