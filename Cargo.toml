@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["lib/botris"]
+members = ["lib/botris", "lib/mino"]
 exclude = ["example/botris-hello"]
