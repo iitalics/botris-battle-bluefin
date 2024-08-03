@@ -10,7 +10,8 @@ use tokio_tungstenite::connect_async as ws_connect_async;
 use tokio_tungstenite::tungstenite;
 use tungstenite::http::Uri;
 
-use botris::{ClientMessage, Command, Message, RoomData, SessionId, UnknownMessage};
+use botris::api::{ClientMessage, Message, RoomData, SessionId, UnknownMessage};
+use botris::game::{Board, Command, PieceData};
 
 /// Botris API example.
 #[derive(Parser, Debug)]
@@ -82,10 +83,9 @@ async fn main() -> Result<()> {
             }
 
             if preauth_room_data.is_some() && preauth_session_id.is_some() {
-                let new_session = Session {
-                    room_data: preauth_room_data.take().unwrap(),
-                    session_id: preauth_session_id.take().unwrap(),
-                };
+                let room_data = preauth_room_data.take().unwrap();
+                let session_id = preauth_session_id.take().unwrap();
+                let new_session = Session::new(session_id, room_data);
                 info!("new session: {}", new_session.session_id);
                 session = Some(new_session);
             } else {
@@ -117,7 +117,20 @@ async fn main() -> Result<()> {
                     .retain(|p| p.session_id != session_id);
             }
 
-            Message::PlayerAction { session_id, game_state } => {
+            Message::PlayerAction {
+                session_id,
+                game_state,
+            } => {
+                if session_id == session.session_id {
+                    if let Some(expected_board) = session.expected_board.take() {
+                        if expected_board != game_state.board {
+                            warn!("board differed from expected");
+                            warn!("   {:?}", game_state.board);
+                            warn!("!= {:?}", expected_board);
+                        }
+                    }
+                }
+
                 for pl in session.room_data.players.iter_mut() {
                     if pl.session_id == session_id {
                         pl.game_state = Some(game_state);
@@ -145,16 +158,29 @@ async fn main() -> Result<()> {
                 players,
             } => {
                 info!("move requested");
-                debug!("{game_state:?}");
-                debug!("{players:?}");
+                info!("=> {:?}", game_state.current);
+
+                if game_state.current != PieceData::spawn(game_state.current.piece) {
+                    warn!("not spawn: {:?}", game_state.current);
+                    warn!(" != {:?}", PieceData::spawn(game_state.current.piece));
+                }
 
                 session.room_data.players = players;
 
-                let commands = &[Command::RotateCw];
+                let commands = &[Command::MoveLeft];
                 let cmsg = ClientMessage::Action { commands };
                 debug!("< {cmsg}");
                 let ws_cmsg = tungstenite::Message::text(cmsg.to_string());
                 ws.send(ws_cmsg).await.context("send error")?;
+
+                let mut expected_board = game_state.board.clone();
+                expected_board.place_piece(
+                    game_state
+                        .current
+                        .offset((-1, 0))
+                        .hard_drop(&game_state.board),
+                );
+                session.expected_board = Some(expected_board);
             }
 
             Message::Error(message) => {
@@ -168,7 +194,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        session.print_game();
+        //session.print_game();
     }
 
     info!("bye");
@@ -180,9 +206,18 @@ async fn main() -> Result<()> {
 struct Session {
     session_id: SessionId,
     room_data: RoomData,
+    expected_board: Option<Board>,
 }
 
 impl Session {
+    fn new(session_id: SessionId, room_data: RoomData) -> Self {
+        Self {
+            session_id,
+            room_data,
+            expected_board: None,
+        }
+    }
+
     fn print_game(&self) {
         let players = &self.room_data.players;
 
