@@ -174,25 +174,8 @@ impl WallKicks for PieceType {
 mod test {
     use super::*;
     use crate::piece::Pos;
+    use crate::test::assert_same_set;
     use std::format;
-
-    fn assert_same_set<T, XS, YS>(xs: XS, ys: YS, why: &str)
-    where
-        T: Ord + core::fmt::Debug,
-        XS: IntoIterator<Item = T>,
-        YS: IntoIterator<Item = T>,
-    {
-        use alloc::collections::BTreeSet;
-        use alloc::vec::Vec;
-        let xs = xs.into_iter().collect::<BTreeSet<_>>();
-        let ys = ys.into_iter().collect::<BTreeSet<_>>();
-        let xs_ys = xs.difference(&ys).collect::<Vec<_>>();
-        let ys_xs = ys.difference(&xs).collect::<Vec<_>>();
-        assert!(
-            xs_ys.is_empty() && ys_xs.is_empty(),
-            "different sets: {why}\n  left: +{xs_ys:?}\n right: +{ys_xs:?}"
-        );
-    }
 
     fn cells(p: PieceType, x: i8, y: i8, r: Rot) -> Cells {
         Piece {
