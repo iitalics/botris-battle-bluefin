@@ -107,7 +107,7 @@ mod test {
     use super::*;
     use crate::matrix::MatBuf;
     use crate::piece::Rot;
-    use crate::standard_rules::PieceType;
+    use crate::standard_rules;
     use crate::test::assert_same_set;
     use core::fmt;
     use core::ops::RangeInclusive;
@@ -135,7 +135,7 @@ mod test {
     #[test]
     fn test_t_places() {
         assert_places(
-            PieceType::T,
+            standard_rules::T,
             Mat::empty(),
             [
                 (0..=7, 1, Rot::N),
@@ -150,7 +150,7 @@ mod test {
     #[test]
     fn test_i_places() {
         assert_places(
-            PieceType::I,
+            standard_rules::I,
             Mat::empty(),
             [
                 (0..=6, 1, Rot::N),
@@ -172,7 +172,7 @@ mod test {
         mat.set(1, 0b1110011111);
         //
         assert_places(
-            PieceType::S,
+            standard_rules::S,
             &mat,
             [
                 (0..=4, 3, Rot::N),

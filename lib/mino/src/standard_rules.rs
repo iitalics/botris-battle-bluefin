@@ -17,6 +17,8 @@ pub enum PieceType {
     Z = 6,
 }
 
+pub use PieceType::*;
+
 impl fmt::Display for PieceType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO: PieceType::name()
@@ -215,7 +217,6 @@ mod test {
 
     #[test]
     fn test_cells() {
-        use PieceType::*;
         assert_cells(I, 3, 20, Rot::N, [(3, 19), (4, 19), (5, 19), (6, 19)]);
         assert_cells(I, 3, 20, Rot::E, [(5, 20), (5, 19), (5, 18), (5, 17)]);
         assert_cells(I, 3, 20, Rot::S, [(3, 18), (4, 18), (5, 18), (6, 18)]);
@@ -252,27 +253,27 @@ mod test {
 
     #[test]
     fn test_spawn() {
-        assert_eq!(Piece::spawn(PieceType::I).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(PieceType::J).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(PieceType::L).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(PieceType::O).pos, Pos::from((4, 20, Rot::N)));
-        assert_eq!(Piece::spawn(PieceType::S).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(PieceType::T).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(PieceType::Z).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(I).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(J).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(L).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(O).pos, Pos::from((4, 20, Rot::N)));
+        assert_eq!(Piece::spawn(S).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(T).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(Piece::spawn(Z).pos, Pos::from((3, 20, Rot::N)));
     }
 
     #[test]
     fn test_wall_kick_lookup() {
         assert_eq!(
-            PieceType::Z.wall_kicks(Rot::N, Turn::Cw),
+            Z.wall_kicks(Rot::N, Turn::Cw),
             [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)]
         );
         assert_eq!(
-            PieceType::J.wall_kicks(Rot::S, Turn::Ccw),
+            J.wall_kicks(Rot::S, Turn::Ccw),
             [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
         );
         assert_eq!(
-            PieceType::I.wall_kicks(Rot::E, Turn::Ccw),
+            I.wall_kicks(Rot::E, Turn::Ccw),
             [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
         );
     }
@@ -280,7 +281,7 @@ mod test {
     #[test]
     fn test_sonic_drop() {
         let mat = Mat::empty();
-        let mut pc = Piece::spawn(PieceType::T);
+        let mut pc = Piece::spawn(T);
         assert_eq!(pc.pos, (3, 20, Rot::N));
         let (dy, cells) = pc.sonic_drop(mat);
         assert_eq!(dy, 19);
@@ -295,7 +296,7 @@ mod test {
     #[test]
     fn test_t_wall_kick() {
         let mat = Mat::empty();
-        let mut pc = Piece::new(PieceType::T, (3, 1, Rot::N));
+        let mut pc = Piece::new(T, (3, 1, Rot::N));
         let cells = pc.try_rotate(mat, Turn::Cw).expect("turn(Cw)");
         assert_eq!(pc.cells(), cells);
         assert_eq!(pc.pos, (2, 2, Rot::E));
