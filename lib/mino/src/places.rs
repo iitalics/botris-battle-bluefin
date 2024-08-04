@@ -5,17 +5,15 @@ use crate::piece::{Dir, Piece, Pos, Shape, Spawn, Turn, WallKicks};
 
 type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AHasher>>;
 
-pub struct Places<'m, T> {
+#[derive(Clone)]
+pub struct Places<'m, T: Shape + Clone> {
     matrix: &'m Mat,
     piece_type: T,
     stack: Vec<Pos>,
     visited: HashSet<Pos>,
 }
 
-pub fn places<'m, T>(matrix: &'m Mat, piece_type: T) -> Places<'m, T>
-where
-    T: Shape + Spawn + Clone,
-{
+pub fn places<'m, T: Shape + Clone + Spawn>(matrix: &'m Mat, piece_type: T) -> Places<'m, T> {
     let mut places = Places {
         matrix,
         piece_type: piece_type.clone(),
@@ -32,10 +30,7 @@ where
     places
 }
 
-impl<T> Places<'_, T>
-where
-    T: Shape + Clone,
-{
+impl<T: Shape + Clone> Places<'_, T> {
     fn push(&mut self, pos: Pos) -> bool {
         if !self.visited.insert(pos) {
             return false;
@@ -54,10 +49,7 @@ pub struct PlacesResult<T> {
     pub is_immobile: bool,
 }
 
-impl<T> Iterator for Places<'_, T>
-where
-    T: Shape + WallKicks + Clone,
-{
+impl<T: Shape + Clone + WallKicks> Iterator for Places<'_, T> {
     type Item = PlacesResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
