@@ -24,7 +24,6 @@ where
     };
 
     let spawn_piece = Piece::spawn(piece_type);
-
     if !spawn_piece.cells().collides(matrix) {
         // if this is not true, then we are dead
         places.push(spawn_piece.pos);
@@ -41,7 +40,6 @@ where
         if !self.visited.insert(pos) {
             return false;
         }
-
         self.stack.push(pos);
         true
     }
@@ -166,8 +164,7 @@ mod test {
         let mut mat = MatBuf::new();
         // 1 xxxxx..xxx
         // 0 xxxx..xxxx
-        //   ----------
-        // - 0123456789
+        //   0123456789
         mat.set(0, 0b1111001111);
         mat.set(1, 0b1110011111);
         //
