@@ -9,7 +9,7 @@ pub mod matrix;
 pub use matrix::{Mat, MatBuf};
 
 pub mod input;
-pub use input::{Dir, Rot, Turn};
+pub use input::{Dir, Input, Rot, Turn};
 
 pub mod piece;
 pub use piece::{Cells, Pos};
