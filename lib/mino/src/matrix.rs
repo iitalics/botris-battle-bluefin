@@ -78,6 +78,17 @@ impl MatBuf {
             self.rows_mut()[y] |= bits;
         }
     }
+
+    pub fn copy_from(&mut self, mat: &Mat) {
+        self.rows_mut().clear();
+        self.rows_mut().extend_from_slice(mat.rows());
+    }
+}
+
+impl Default for MatBuf {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Deref for MatBuf {

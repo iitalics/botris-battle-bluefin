@@ -96,6 +96,12 @@ pub struct Piece<T> {
     pub pos: Pos,
 }
 
+impl<T> Piece<T> {
+    pub fn new(shape: T, pos: Pos) -> Self {
+        Self { shape, pos }
+    }
+}
+
 impl<T: fmt::Debug> fmt::Debug for Piece<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Piece")
@@ -115,7 +121,7 @@ pub trait Spawn {
 impl<T: Spawn> Piece<T> {
     pub fn spawn(shape: T) -> Self {
         let pos = shape.spawn().into();
-        Self { shape, pos }
+        Self::new(shape, pos)
     }
 }
 
@@ -290,7 +296,7 @@ impl<T: Shape> Piece<T> {
     /// kicks), returns `Some(final_cells)` and rotates the piece. If there is a
     /// collision, returns `None` and leaves the piece unmodified.
     pub fn try_rotate(&mut self, mat: &Mat, dr: Turn) -> Option<Cells> {
-        let r = self.pos.r;
+        let r = self.pos.r + dr;
         let x = self.pos.x;
         let y = self.pos.y;
         let cells = self.shape.cells(r).offset(x, y);
@@ -300,11 +306,26 @@ impl<T: Shape> Piece<T> {
             if !cells.collides(mat) {
                 self.pos.x += dx;
                 self.pos.y += dy;
-                self.pos.r = r + dr;
+                self.pos.r = r;
                 return Some(cells);
             }
         }
 
         None
+    }
+
+    /// Sonic drop the piece so that it touches the stack. Returns the vertical distance
+    /// fell, and the final cells. If the distance is zero then the piece is already on
+    /// the stack.
+    pub fn sonic_drop(&mut self, mat: &Mat) -> (i8, Cells) {
+        let mut dy = 0;
+        let cells = self.cells();
+
+        while !cells.offset(0, dy - 1).collides(mat) {
+            debug_assert!(dy > i8::MIN);
+            dy -= 1;
+        }
+
+        (-dy, cells.offset(0, dy))
     }
 }
