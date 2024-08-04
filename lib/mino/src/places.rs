@@ -6,14 +6,11 @@ use crate::piece::{Piece, Pos, Shape, Spawn, WallKicks};
 
 type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AHasher>>;
 
-#[derive(Clone)]
-pub struct Places<'m, T: Shape + Clone> {
-    matrix: &'m Mat,
-    piece_type: T,
-    stack: Vec<Pos>,
-    visited: HashSet<Pos>,
-}
+// == iterating all reachable places ==
 
+/// Returns an iterator that yields all of the reachable places on `matrix` from piece
+/// `piece_type`, starting at its spawn location. If the spawn location is blocked then
+/// this will be empty (or you can check with `is_dead`).
 pub fn places<'m, T: Shape + Clone + Spawn>(matrix: &'m Mat, piece_type: T) -> Places<'m, T> {
     let mut places = Places {
         matrix,
@@ -31,7 +28,20 @@ pub fn places<'m, T: Shape + Clone + Spawn>(matrix: &'m Mat, piece_type: T) -> P
     places
 }
 
+#[derive(Clone)]
+pub struct Places<'m, T: Shape + Clone> {
+    matrix: &'m Mat,
+    piece_type: T,
+    stack: Vec<Pos>,
+    visited: HashSet<Pos>,
+}
+
 impl<T: Shape + Clone> Places<'_, T> {
+    /// Returns true if the player is dead since the piece spawn was blocked.
+    pub fn is_dead(&self) -> bool {
+        self.stack.is_empty() && self.visited.is_empty()
+    }
+
     fn push(&mut self, pos: Pos) -> bool {
         if !self.visited.insert(pos) {
             return false;
