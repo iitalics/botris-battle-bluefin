@@ -3,8 +3,7 @@ use alloc::vec::Vec;
 use crate::matrix::Mat;
 use crate::piece::{Dir, Piece, Pos, Shape, Turn};
 
-type HashBuilder = core::hash::BuildHasherDefault<ahash::AHasher>;
-type HashSet<T> = hashbrown::HashSet<T, HashBuilder>;
+type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AHasher>>;
 
 pub struct Places<'m, T> {
     matrix: &'m Mat,
@@ -24,21 +23,11 @@ where
         visited: HashSet::with_capacity(256),
     };
 
-    // spawn the initial piece to start the search
-    let mut pc = Piece::spawn(piece_type);
+    let spawn_piece = Piece::spawn(piece_type);
 
-    // if piece is above the top row, immediately drop it to right above the matrix. this
-    // hopefully avoids some checks when computing sonic drop
-    let (_, ys) = pc.cells().extents();
-    let y0 = ys.start;
-    let y_top = matrix.len();
-    if y0 > y_top {
-        pc.pos.y -= y0 - y_top;
-    }
-
-    if !pc.cells().collides(matrix) {
+    if !spawn_piece.cells().collides(matrix) {
         // if this is not true, then we are dead
-        places.push(pc.pos);
+        places.push(spawn_piece.pos);
     }
 
     places
@@ -62,11 +51,10 @@ where
     }
 }
 
-type PlacesResult<T> = Piece<T>;
-// pub struct PlacesResult<T> {
-//     pub piece: Piece<T>,
-//     pub is_immobile: bool,
-// }
+pub struct PlacesResult<T> {
+    pub piece: Piece<T>,
+    pub is_immobile: bool,
+}
 
 impl<T> Iterator for Places<'_, T>
 where
@@ -76,37 +64,129 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let mut pc = self.pop()?;
+            let mut piece = self.pop()?;
 
-            let mut pc_cw = pc.clone();
-            if pc_cw.try_rotate(self.matrix, Turn::Cw).is_some() {
-                self.push(pc_cw.pos);
+            let mut cw = piece.clone();
+            if cw.try_rotate(self.matrix, Turn::Cw).is_some() {
+                self.push(cw.pos);
             }
 
-            let mut pc_ccw = pc.clone();
-            if pc_ccw.try_rotate(self.matrix, Turn::Ccw).is_some() {
-                self.push(pc_ccw.pos);
+            let mut ccw = piece.clone();
+            if ccw.try_rotate(self.matrix, Turn::Ccw).is_some() {
+                self.push(ccw.pos);
             }
 
-            let mut pc_l = pc.clone();
-            if pc_l.try_shift(self.matrix, Dir::Left).is_some() {
-                self.push(pc_l.pos);
+            let mut left = piece.clone();
+            if left.try_shift(self.matrix, Dir::Left).is_some() {
+                self.push(left.pos);
             }
 
-            let mut pc_r = pc.clone();
-            if pc_r.try_shift(self.matrix, Dir::Right).is_some() {
-                self.push(pc_r.pos);
+            let mut right = piece.clone();
+            if right.try_shift(self.matrix, Dir::Right).is_some() {
+                self.push(right.pos);
             }
 
-            let (dy, _) = pc.sonic_drop(self.matrix);
+            let (dy, cells) = piece.sonic_drop(self.matrix);
             if dy != 0 {
                 // piece was floating so we don't return it yet; push it on the stack and
                 // return it when reached in a future iteration
-                self.push(pc.pos);
+                self.push(piece.pos);
                 continue;
             }
 
-            return Some(pc);
+            let is_immobile = cells.immobile(self.matrix);
+            return Some(PlacesResult { piece, is_immobile });
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::piece::Rot::*;
+    use crate::standard_rules::PieceType;
+    use crate::test::assert_same_set;
+
+    #[test]
+    fn test_t_places() {
+        let piece = PieceType::T;
+        let mat = Mat::empty();
+        assert_same_set(
+            places(mat, piece).map(|r| {
+                assert!(!r.is_immobile);
+                r.piece.cells()
+            }),
+            [
+                (0, 1, N),
+                (1, 1, N),
+                (2, 1, N),
+                (3, 1, N),
+                (4, 1, N),
+                (5, 1, N),
+                (6, 1, N),
+                (7, 1, N),
+                (-1, 2, E),
+                (0, 2, E),
+                (1, 2, E),
+                (2, 2, E),
+                (3, 2, E),
+                (4, 2, E),
+                (5, 2, E),
+                (6, 2, E),
+                (7, 2, E),
+                (0, 2, S),
+                (1, 2, S),
+                (2, 2, S),
+                (3, 2, S),
+                (4, 2, S),
+                (5, 2, S),
+                (6, 2, S),
+                (7, 2, S),
+                (0, 2, W),
+                (1, 2, W),
+                (2, 2, W),
+                (3, 2, W),
+                (4, 2, W),
+                (5, 2, W),
+                (6, 2, W),
+                (7, 2, W),
+                (8, 2, W),
+            ]
+            .map(|pos| Piece::new(piece, pos).cells()),
+            "places({piece})",
+        );
+    }
+
+    #[test]
+    fn test_i_places() {
+        let piece = PieceType::I;
+        let mat = Mat::empty();
+        assert_same_set(
+            places(mat, piece).map(|r| {
+                assert!(!r.is_immobile);
+                r.piece.cells()
+            }),
+            [
+                (0, 1, N),
+                (1, 1, N),
+                (2, 1, N),
+                (3, 1, N),
+                (4, 1, N),
+                (5, 1, N),
+                (6, 1, N),
+                (-2, 3, E),
+                (-1, 3, E),
+                (0, 3, E),
+                (1, 3, E),
+                (2, 3, E),
+                (3, 3, E),
+                (4, 3, E),
+                (5, 3, E),
+                (6, 3, E),
+                (7, 3, E),
+            ]
+            .map(|pos| Piece::new(piece, pos).cells()),
+            "places({piece})",
+        );
     }
 }
