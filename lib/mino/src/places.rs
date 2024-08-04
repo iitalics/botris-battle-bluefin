@@ -1,8 +1,7 @@
 use alloc::collections::BinaryHeap;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
-use core::cmp::Ordering;
-use core::ops;
+use core::{cmp, ops};
 
 use crate::input::{Dir, Input, Turn};
 use crate::matrix::Mat;
@@ -236,14 +235,14 @@ where
 struct ShortestPath<'m, T: Shape + Clone> {
     matrix: &'m Mat,
     piece_type: T,
-    unvisited: BinaryHeap<Node>,
+    unvisited: BinaryHeap<ShortestPathNode>,
     visited: HashSet<Pos>,
 }
 
 impl<'m, T: Shape + Spawn + Clone> ShortestPath<'m, T> {
     fn new(matrix: &'m Mat, piece_type: T) -> Self {
         let spawn_piece = Piece::spawn(piece_type.clone());
-        let root = Node::new_root(spawn_piece.pos);
+        let root = ShortestPathNode::new_root(spawn_piece.pos);
         Self {
             matrix,
             piece_type,
@@ -254,7 +253,7 @@ impl<'m, T: Shape + Spawn + Clone> ShortestPath<'m, T> {
 }
 
 impl<T: Shape + Clone> ShortestPath<'_, T> {
-    fn push(&mut self, parent: &Node, input: Input, pos: Pos) {
+    fn push(&mut self, parent: &ShortestPathNode, input: Input, pos: Pos) {
         if self.visited.insert(pos) {
             self.unvisited.push(parent.new_child(input, pos));
         }
@@ -262,9 +261,9 @@ impl<T: Shape + Clone> ShortestPath<'_, T> {
 }
 
 impl<T: Shape + WallKicks + Clone> Iterator for ShortestPath<'_, T> {
-    type Item = Node;
+    type Item = ShortestPathNode;
 
-    fn next(&mut self) -> Option<Node> {
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
             let node = self.unvisited.pop()?;
             let piece = Piece::new(self.piece_type.clone(), node.pos);
@@ -303,27 +302,27 @@ impl<T: Shape + WallKicks + Clone> Iterator for ShortestPath<'_, T> {
 }
 
 #[derive(Clone)]
-struct Node(Rc<NodeData>);
+struct ShortestPathNode(Rc<ShortestPathNodeData>);
 
-impl ops::Deref for Node {
-    type Target = NodeData;
+impl ops::Deref for ShortestPathNode {
+    type Target = ShortestPathNodeData;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-struct NodeData {
+struct ShortestPathNodeData {
     n_shift: u32,
     n_rotate: u32,
     n_drop: u32,
     pos: Pos,
     input: Option<Input>,
-    parent: Option<Node>,
+    parent: Option<ShortestPathNode>,
 }
 
-impl Node {
+impl ShortestPathNode {
     fn new_root(pos: Pos) -> Self {
-        Self(Rc::new(NodeData {
+        Self(Rc::new(ShortestPathNodeData {
             n_shift: 0,
             n_rotate: 0,
             n_drop: 0,
@@ -346,7 +345,7 @@ impl Node {
             Input::Cw | Input::Ccw => n_rotate += 1,
             Input::SonicDrop => n_drop += 1,
         }
-        Self(Rc::new(NodeData {
+        Self(Rc::new(ShortestPathNodeData {
             n_shift,
             n_rotate,
             n_drop,
@@ -362,7 +361,7 @@ impl Node {
 // makes it so that left/right inputs come first, then rotations, then drops.
 type Distance = (u32, u32, u32);
 
-impl NodeData {
+impl ShortestPathNodeData {
     fn n_inputs(&self) -> u32 {
         self.n_shift + self.n_rotate + self.n_drop
     }
@@ -373,7 +372,7 @@ impl NodeData {
 
     fn inputs(&self) -> Vec<Input> {
         let mut inputs = Vec::with_capacity(self.n_inputs() as usize);
-        let mut parent: Option<&NodeData> = Some(self);
+        let mut parent: Option<&ShortestPathNodeData> = Some(self);
         while let Some(node) = parent.take() {
             inputs.extend(node.input);
             parent = node.parent.as_deref();
@@ -383,23 +382,23 @@ impl NodeData {
     }
 }
 
-impl PartialEq for Node {
+impl cmp::Ord for ShortestPathNode {
+    fn cmp(&self, rhs: &Self) -> cmp::Ordering {
+        rhs.distance().cmp(&self.distance())
+    }
+}
+
+impl cmp::Eq for ShortestPathNode {}
+
+impl cmp::PartialEq for ShortestPathNode {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other).is_eq()
     }
 }
 
-impl Eq for Node {}
-
-impl PartialOrd for Node {
-    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
-        Some(self.cmp(rhs))
-    }
-}
-
-impl Ord for Node {
-    fn cmp(&self, rhs: &Self) -> Ordering {
-        self.distance().cmp(&rhs.distance()).reverse()
+impl cmp::PartialOrd for ShortestPathNode {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
