@@ -44,6 +44,7 @@ impl<T: Shape + Clone> Places<'_, T> {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct PlacesResult<T> {
     pub piece: Piece<T>,
     pub is_immobile: bool,
