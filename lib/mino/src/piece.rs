@@ -35,6 +35,19 @@ impl fmt::Debug for Pos {
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Dir {
+    Left = -1,
+    Right = 1,
+}
+
+impl ops::Add<Dir> for i8 {
+    type Output = i8;
+    fn add(self, rhs: Dir) -> i8 {
+        self + rhs as i8
+    }
+}
+
 /// Represents the rotation state of a shape.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub enum Rot {
@@ -60,6 +73,19 @@ impl From<Rot> for u8 {
     #[inline]
     fn from(r: Rot) -> Self {
         r as u8
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Turn {
+    Cw = 1,
+    Ccw = 3,
+}
+
+impl ops::Add<Turn> for Rot {
+    type Output = Rot;
+    fn add(self, t: Turn) -> Self::Output {
+        (self as u8 + t as u8).into()
     }
 }
 
@@ -93,8 +119,12 @@ impl<T: Spawn> Piece<T> {
     }
 }
 
+pub trait WallKicks {
+    fn wall_kicks(&self, r: Rot, dr: Turn) -> &'static [(i8, i8)];
+}
+
 /// Abstraction for determining the cells of a shape.
-pub trait Shape {
+pub trait Shape: Spawn + WallKicks {
     fn cells(&self, r: Rot) -> Cells;
 }
 
@@ -255,39 +285,7 @@ impl<T: Shape> Piece<T> {
 
         None
     }
-}
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Dir {
-    Left = -1,
-    Right = 1,
-}
-
-impl ops::Add<Dir> for i8 {
-    type Output = i8;
-    fn add(self, rhs: Dir) -> i8 {
-        self + rhs as i8
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Turn {
-    Cw = 1,
-    Ccw = 3,
-}
-
-impl ops::Add<Turn> for Rot {
-    type Output = Rot;
-    fn add(self, t: Turn) -> Self::Output {
-        (self as u8 + t as u8).into()
-    }
-}
-
-pub trait WallKicks: Shape {
-    fn wall_kicks(&self, r: Rot, dr: Turn) -> &'static [(i8, i8)];
-}
-
-impl<T: WallKicks> Piece<T> {
     /// Try to rotate in the given direction. If there is no collision (applying the wall
     /// kicks), returns `Some(final_cells)` and rotates the piece. If there is a
     /// collision, returns `None` and leaves the piece unmodified.
