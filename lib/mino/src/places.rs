@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::matrix::Mat;
-use crate::piece::{Dir, Piece, Pos, Shape, Turn};
+use crate::piece::{Dir, Piece, Pos, Shape, Spawn, Turn, WallKicks};
 
 type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AHasher>>;
 
@@ -14,7 +14,7 @@ pub struct Places<'m, T> {
 
 pub fn places<'m, T>(matrix: &'m Mat, piece_type: T) -> Places<'m, T>
 where
-    T: Shape + Clone,
+    T: Shape + Spawn + Clone,
 {
     let mut places = Places {
         matrix,
@@ -58,7 +58,7 @@ pub struct PlacesResult<T> {
 
 impl<T> Iterator for Places<'_, T>
 where
-    T: Shape + Clone,
+    T: Shape + WallKicks + Clone,
 {
     type Item = PlacesResult<T>;
 

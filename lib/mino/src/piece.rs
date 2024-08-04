@@ -122,7 +122,7 @@ impl<T: fmt::Debug> fmt::Debug for Piece<T> {
     }
 }
 
-/// Abstraction for determining spawn locations.
+/// Interface for pieces that can be spawned.
 pub trait Spawn {
     fn spawn(&self) -> (i8, i8);
 }
@@ -134,12 +134,13 @@ impl<T: Spawn> Piece<T> {
     }
 }
 
+/// Interface for pieces that have a list of wall kicks.
 pub trait WallKicks {
     fn wall_kicks(&self, r: Rot, dr: Turn) -> &'static [(i8, i8)];
 }
 
-/// Abstraction for determining the cells of a shape.
-pub trait Shape: Spawn + WallKicks {
+/// Interface for pieces that have [`Cells`] representations of their shape.
+pub trait Shape {
     fn cells(&self, r: Rot) -> Cells;
 }
 
@@ -169,6 +170,7 @@ impl Cells {
         }
     }
 
+    /// Offset the cells by the given amount.
     pub fn offset(&self, x: i8, y: i8) -> Self {
         Self {
             bits: self.bits,
@@ -181,10 +183,14 @@ impl Cells {
         }
     }
 
+    /// Returns the boundary extents of the cells, representing the range of cells taken
+    /// up along the x and y axis respectively.
     pub fn extents(&self) -> (Range<i8>, Range<i8>) {
         (self.x0..self.x1, self.y0..self.y1)
     }
 
+    /// Returns the list of coordinates occupied by the cells. This is not particularly
+    /// efficient so should be used only for tests.
     pub fn coords(&self) -> impl Iterator<Item = (i8, i8)> {
         let x0 = self.x0;
         let y0 = self.y0;
@@ -198,6 +204,7 @@ impl Cells {
             })
     }
 
+    /// Returns `true` if any of the cells collides with the given matrix.
     pub fn collides(&self, mat: &Mat) -> bool {
         if self.x0 < 0 || self.x1 > mat.cols() || self.y0 < 0 {
             return true;
@@ -218,6 +225,7 @@ impl Cells {
         test != 0
     }
 
+    /// Returns `true` if the cells are immobile.
     pub fn immobile(&self, mat: &Mat) -> bool {
         self.offset(0, -1).collides(mat)
             && self.offset(0, 1).collides(mat)
@@ -225,6 +233,7 @@ impl Cells {
             && self.offset(1, 0).collides(mat)
     }
 
+    /// Places the cells onto the matrix by filling in the occupied coordinates.
     pub fn place(&self, mat: &mut MatBuf) {
         let y0 = self.y0;
         let y1 = self.y1;
@@ -246,6 +255,7 @@ impl fmt::Debug for Cells {
             h: usize,
             bits: u16,
         }
+
         impl fmt::Debug for DebugCoords {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let mut f = f.debug_list();
@@ -304,7 +314,10 @@ impl<T: Shape> Piece<T> {
     /// Try to rotate in the given direction. If there is no collision (applying the wall
     /// kicks), returns `Some(final_cells)` and rotates the piece. If there is a
     /// collision, returns `None` and leaves the piece unmodified.
-    pub fn try_rotate(&mut self, mat: &Mat, dr: Turn) -> Option<Cells> {
+    pub fn try_rotate(&mut self, mat: &Mat, dr: Turn) -> Option<Cells>
+    where
+        T: WallKicks,
+    {
         let r0 = self.pos.r;
         let r = self.pos.r + dr;
         let x = self.pos.x;
