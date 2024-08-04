@@ -173,6 +173,7 @@ impl WallKicks for PieceType {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::matrix::Mat;
     use crate::piece::Pos;
     use crate::test::assert_same_set;
     use std::format;
@@ -265,5 +266,29 @@ mod test {
             PieceType::I.wall_kicks(Rot::E, Turn::Ccw),
             [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
         );
+    }
+
+    #[test]
+    fn test_sonic_drop() {
+        let mat = Mat::empty();
+        let mut pc = Piece::spawn(PieceType::T);
+        assert_eq!(pc.pos, (3, 20, Rot::N));
+        let (dy, cells) = pc.sonic_drop(mat);
+        assert_eq!(dy, 19);
+        assert_eq!(pc.pos, (3, 1, Rot::N));
+        assert_eq!(pc.cells(), cells);
+        let (dy, cells) = pc.sonic_drop(mat);
+        assert_eq!(dy, 0);
+        assert_eq!(pc.pos, (3, 1, Rot::N));
+        assert_eq!(pc.cells(), cells);
+    }
+
+    #[test]
+    fn test_t_wall_kick() {
+        let mat = Mat::empty();
+        let mut pc = Piece::new(PieceType::T, (3, 1, Rot::N));
+        let cells = pc.try_rotate(mat, Turn::Cw).expect("turn(Cw)");
+        assert_eq!(pc.cells(), cells);
+        assert_eq!(pc.pos, (2, 2, Rot::E));
     }
 }
