@@ -58,6 +58,7 @@ impl Mat {
 pub struct MatBuf(Vec<u16>);
 
 impl MatBuf {
+    /// Allocate a new mutable matrix, initially empty.
     pub fn new() -> Self {
         Self(Vec::with_capacity(20))
     }
@@ -66,22 +67,44 @@ impl MatBuf {
         &mut self.0
     }
 
+    /// Clear the matrix so that it is empty again.
     pub fn clear(&mut self) {
         self.rows_mut().clear();
     }
 
-    pub fn set(&mut self, y: i8, bits: u16) {
-        if let Ok(y) = usize::try_from(y) {
-            if self.rows().len() <= y {
-                self.rows_mut().resize(y + 1, EMPTY);
-            }
-            self.rows_mut()[y] |= bits;
-        }
-    }
-
+    /// Set this matrix to be identical to the given matrix.
     pub fn copy_from(&mut self, mat: &Mat) {
         self.rows_mut().clear();
         self.rows_mut().extend_from_slice(mat.rows());
+    }
+
+    /// Set the column bits for the given row.
+    pub fn set(&mut self, y: i8, bits: u16) {
+        let rows = self.rows_mut();
+        if let Ok(y) = usize::try_from(y) {
+            if rows.len() <= y {
+                rows.resize(y + 1, EMPTY);
+            }
+            rows[y] |= bits;
+        }
+    }
+
+    /// Remove rows that are full above row `y_start`, moving any rows above them into
+    /// their place. Returns the number of rows removed.
+    pub fn clear_lines(&mut self, y_start: u8) -> u8 {
+        let rows = self.rows_mut();
+        let y_end = rows.len();
+        let y_start = usize::try_from(y_start).unwrap_or(0).min(y_end);
+        let mut y_to = y_start;
+        for y in y_start..y_end {
+            if rows[y] != FULL {
+                rows[y_to] = rows[y];
+                y_to += 1;
+            }
+        }
+        // SAFETY: 0 <= y_start <= y_to < y_end
+        unsafe { rows.set_len(y_to) };
+        y_end as u8 - y_to as u8
     }
 }
 
@@ -131,5 +154,28 @@ mod test {
         assert_eq!(mat.get(3), EMPTY);
         mat.set(0, 0b110000);
         assert_eq!(mat.get(0), EMPTY | 0b110001);
+    }
+
+    #[test]
+    fn test_mat_clear_lines() {
+        let mut mat = MatBuf::new();
+        assert_eq!(mat.clear_lines(0), 0);
+        assert_eq!(mat.len(), 0);
+        mat.set(0, FULL);
+        mat.set(1, FULL);
+        mat.set(2, 0b100);
+        mat.set(3, FULL);
+        mat.set(4, FULL);
+        assert_eq!(mat.clear_lines(1), 3);
+        assert_eq!(mat.len(), 2);
+        assert_eq!(mat.get(0), FULL, "{:b}", mat.get(0));
+        assert_eq!(mat.get(1), EMPTY | 0b100, "{:b}", mat.get(1));
+        assert_eq!(mat.get(2), EMPTY, "{:b}", mat.get(2));
+        assert_eq!(mat.clear_lines(1), 0);
+        assert_eq!(mat.len(), 2);
+        assert_eq!(mat.clear_lines(0), 1);
+        assert_eq!(mat.len(), 1);
+        assert_eq!(mat.get(0), EMPTY | 0b100, "{:b}", mat.get(0));
+        assert_eq!(mat.get(1), EMPTY, "{:b}", mat.get(1));
     }
 }
