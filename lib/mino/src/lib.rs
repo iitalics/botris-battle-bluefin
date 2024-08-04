@@ -15,7 +15,7 @@ pub mod piece;
 pub use piece::{Cells, Pos};
 
 pub mod places;
-pub use places::{places, Places};
+pub use places::{places, reach, Places};
 
 pub mod standard_rules;
 
