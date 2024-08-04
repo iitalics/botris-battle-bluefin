@@ -103,90 +103,51 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::piece::Rot::*;
+    use crate::piece::Rot;
     use crate::standard_rules::PieceType;
     use crate::test::assert_same_set;
+    use core::ops::RangeInclusive;
+
+    fn assert_places(
+        piece: PieceType,
+        mat: &Mat,
+        expected: impl IntoIterator<Item = (RangeInclusive<i8>, i8, Rot)>,
+    ) {
+        let actual_places = places(mat, piece).map(|res| {
+            assert!(!res.is_immobile);
+            res.piece.pos
+        });
+        let expected_places = expected
+            .into_iter()
+            .flat_map(|(xs, y, r)| xs.map(move |x| (x, y, r).into()));
+        assert_same_set(actual_places, expected_places, &piece);
+    }
 
     #[test]
     fn test_t_places() {
-        let piece = PieceType::T;
-        let mat = Mat::empty();
-        assert_same_set(
-            places(mat, piece).map(|r| {
-                assert!(!r.is_immobile);
-                r.piece.cells()
-            }),
+        assert_places(
+            PieceType::T,
+            Mat::empty(),
             [
-                (0, 1, N),
-                (1, 1, N),
-                (2, 1, N),
-                (3, 1, N),
-                (4, 1, N),
-                (5, 1, N),
-                (6, 1, N),
-                (7, 1, N),
-                (-1, 2, E),
-                (0, 2, E),
-                (1, 2, E),
-                (2, 2, E),
-                (3, 2, E),
-                (4, 2, E),
-                (5, 2, E),
-                (6, 2, E),
-                (7, 2, E),
-                (0, 2, S),
-                (1, 2, S),
-                (2, 2, S),
-                (3, 2, S),
-                (4, 2, S),
-                (5, 2, S),
-                (6, 2, S),
-                (7, 2, S),
-                (0, 2, W),
-                (1, 2, W),
-                (2, 2, W),
-                (3, 2, W),
-                (4, 2, W),
-                (5, 2, W),
-                (6, 2, W),
-                (7, 2, W),
-                (8, 2, W),
-            ]
-            .map(|pos| Piece::new(piece, pos).cells()),
-            "places({piece})",
+                (0..=7, 1, Rot::N),
+                (-1..=7, 2, Rot::E),
+                (0..=7, 2, Rot::S),
+                (0..=8, 2, Rot::W),
+            ],
         );
     }
 
     #[test]
     fn test_i_places() {
-        let piece = PieceType::I;
-        let mat = Mat::empty();
-        assert_same_set(
-            places(mat, piece).map(|r| {
-                assert!(!r.is_immobile);
-                r.piece.cells()
-            }),
+        assert_places(
+            PieceType::I,
+            Mat::empty(),
             [
-                (0, 1, N),
-                (1, 1, N),
-                (2, 1, N),
-                (3, 1, N),
-                (4, 1, N),
-                (5, 1, N),
-                (6, 1, N),
-                (-2, 3, E),
-                (-1, 3, E),
-                (0, 3, E),
-                (1, 3, E),
-                (2, 3, E),
-                (3, 3, E),
-                (4, 3, E),
-                (5, 3, E),
-                (6, 3, E),
-                (7, 3, E),
-            ]
-            .map(|pos| Piece::new(piece, pos).cells()),
-            "places({piece})",
+                (0..=6, 1, Rot::N),
+                (0..=6, 2, Rot::S),
+                (-2..=7, 3, Rot::E),
+                (-1..=8, 3, Rot::W),
+            ],
         );
     }
 }
