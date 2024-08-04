@@ -29,6 +29,12 @@ impl From<(i8, i8, Rot)> for Pos {
     }
 }
 
+impl PartialEq<(i8, i8, Rot)> for Pos {
+    fn eq(&self, other: &(i8, i8, Rot)) -> bool {
+        *self == Pos::from(*other)
+    }
+}
+
 impl fmt::Debug for Pos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         (self.x, self.y, self.r).fmt(f)
@@ -97,8 +103,11 @@ pub struct Piece<T> {
 }
 
 impl<T> Piece<T> {
-    pub fn new(shape: T, pos: Pos) -> Self {
-        Self { shape, pos }
+    pub fn new(shape: T, pos: impl Into<Pos>) -> Self {
+        Self {
+            shape,
+            pos: pos.into(),
+        }
     }
 }
 
@@ -120,7 +129,7 @@ pub trait Spawn {
 
 impl<T: Spawn> Piece<T> {
     pub fn spawn(shape: T) -> Self {
-        let pos = shape.spawn().into();
+        let pos = shape.spawn();
         Self::new(shape, pos)
     }
 }
@@ -322,11 +331,18 @@ impl<T: Shape> Piece<T> {
         let mut dy = 0;
         let cells = self.cells();
 
+        // immediately drop to the top of the matrix if the piece is above it
+        let y0 = cells.extents().1.start;
+        let y_top = mat.len();
+        if y0 > y_top {
+            dy = y_top - y0;
+        }
+
         while !cells.offset(0, dy - 1).collides(mat) {
-            debug_assert!(dy > i8::MIN);
             dy -= 1;
         }
 
+        self.pos.y += dy;
         (-dy, cells.offset(0, dy))
     }
 }
