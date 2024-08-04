@@ -2,8 +2,8 @@
 
 use core::fmt;
 
-use super::piece::{Cells, Rot, Turn};
-use super::piece::{Shape, Spawn, WallKicks};
+use super::input::{Rot, Turn};
+use super::piece::{Cells, Shape, Spawn, WallKicks};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(u8)]

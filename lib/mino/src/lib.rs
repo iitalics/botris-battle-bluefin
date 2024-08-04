@@ -8,8 +8,11 @@ extern crate std;
 pub mod matrix;
 pub use matrix::{Mat, MatBuf};
 
+pub mod input;
+pub use input::{Dir, Rot, Turn};
+
 pub mod piece;
-pub use piece::{Cells, Pos, Rot};
+pub use piece::{Cells, Pos};
 
 pub mod places;
 pub use places::{places, Places};

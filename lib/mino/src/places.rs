@@ -1,7 +1,8 @@
 use alloc::vec::Vec;
 
+use crate::input::{Dir, Turn};
 use crate::matrix::Mat;
-use crate::piece::{Dir, Piece, Pos, Shape, Spawn, Turn, WallKicks};
+use crate::piece::{Piece, Pos, Shape, Spawn, WallKicks};
 
 type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AHasher>>;
 
@@ -98,8 +99,8 @@ impl<T: Shape + Clone + WallKicks> Iterator for Places<'_, T> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::input::Rot;
     use crate::matrix::MatBuf;
-    use crate::piece::Rot;
     use crate::standard_rules;
     use crate::test::assert_same_set;
     use core::fmt;
