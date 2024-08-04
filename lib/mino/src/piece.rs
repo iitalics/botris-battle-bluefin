@@ -190,7 +190,7 @@ impl Cells {
     }
 
     pub fn collides(&self, mat: &Mat) -> bool {
-        if self.x0 < 0 || self.x1 >= mat.cols() || self.y0 < 0 {
+        if self.x0 < 0 || self.x1 > mat.cols() || self.y0 < 0 {
             return true;
         }
 
@@ -211,9 +211,9 @@ impl Cells {
 
     pub fn immobile(&self, mat: &Mat) -> bool {
         self.offset(0, -1).collides(mat)
-            || self.offset(0, 1).collides(mat)
-            || self.offset(-1, 0).collides(mat)
-            || self.offset(1, 0).collides(mat)
+            && self.offset(0, 1).collides(mat)
+            && self.offset(-1, 0).collides(mat)
+            && self.offset(1, 0).collides(mat)
     }
 
     pub fn place(&self, mat: &mut MatBuf) {
@@ -296,12 +296,13 @@ impl<T: Shape> Piece<T> {
     /// kicks), returns `Some(final_cells)` and rotates the piece. If there is a
     /// collision, returns `None` and leaves the piece unmodified.
     pub fn try_rotate(&mut self, mat: &Mat, dr: Turn) -> Option<Cells> {
+        let r0 = self.pos.r;
         let r = self.pos.r + dr;
         let x = self.pos.x;
         let y = self.pos.y;
         let cells = self.shape.cells(r).offset(x, y);
 
-        for &(dx, dy) in self.shape.wall_kicks(r, dr) {
+        for &(dx, dy) in self.shape.wall_kicks(r0, dr) {
             let cells = cells.offset(dx, dy);
             if !cells.collides(mat) {
                 self.pos.x += dx;
