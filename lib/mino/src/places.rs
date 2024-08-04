@@ -109,14 +109,17 @@ mod test {
     use crate::piece::Rot;
     use crate::standard_rules::PieceType;
     use crate::test::assert_same_set;
+    use core::fmt;
     use core::ops::RangeInclusive;
 
-    fn assert_places(
-        piece: PieceType,
+    fn assert_places<T>(
+        piece: T,
         mat: &Mat,
         expected: impl IntoIterator<Item = (RangeInclusive<i8>, i8, Rot)>,
         immobile: impl IntoIterator<Item = (i8, i8, Rot)>,
-    ) {
+    ) where
+        T: Shape + Spawn + WallKicks + Copy + fmt::Display,
+    {
         let immobile = immobile.into_iter().map(Pos::from).collect::<Vec<_>>();
         let actual_places = places(mat, piece).map(|res| {
             let pos = res.piece.pos;
