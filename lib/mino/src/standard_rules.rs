@@ -1,5 +1,7 @@
 //! Standard implementation of tetris pieces.
 
+use core::fmt;
+
 use super::piece::{Cells, Rot, Turn};
 use super::piece::{Shape, Spawn, WallKicks};
 
@@ -13,6 +15,13 @@ pub enum PieceType {
     S = 4,
     T = 5,
     Z = 6,
+}
+
+impl fmt::Display for PieceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO: PieceType::name()
+        <Self as fmt::Debug>::fmt(self, f)
+    }
 }
 
 pub type Piece = super::piece::Piece<PieceType>;
