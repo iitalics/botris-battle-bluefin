@@ -77,13 +77,17 @@ where
             }
 
             let mut left = piece.clone();
-            if left.try_shift(self.matrix, Dir::Left).is_some() {
-                self.push(left.pos);
+            while left.try_shift(self.matrix, Dir::Left).is_some() {
+                if !self.push(left.pos) {
+                    break;
+                }
             }
 
             let mut right = piece.clone();
-            if right.try_shift(self.matrix, Dir::Right).is_some() {
-                self.push(right.pos);
+            while right.try_shift(self.matrix, Dir::Right).is_some() {
+                if !self.push(right.pos) {
+                    break;
+                }
             }
 
             let (dy, cells) = piece.sonic_drop(self.matrix);
