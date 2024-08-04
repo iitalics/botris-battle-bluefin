@@ -107,6 +107,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::matrix::MatBuf;
     use crate::piece::Rot;
     use crate::standard_rules::PieceType;
     use crate::test::assert_same_set;
@@ -116,10 +117,13 @@ mod test {
         piece: PieceType,
         mat: &Mat,
         expected: impl IntoIterator<Item = (RangeInclusive<i8>, i8, Rot)>,
+        immobile: impl IntoIterator<Item = (i8, i8, Rot)>,
     ) {
+        let immobile = immobile.into_iter().map(Pos::from).collect::<Vec<_>>();
         let actual_places = places(mat, piece).map(|res| {
-            assert!(!res.is_immobile);
-            res.piece.pos
+            let pos = res.piece.pos;
+            assert_eq!(res.is_immobile, immobile.contains(&pos), "{pos:?}");
+            pos
         });
         let expected_places = expected
             .into_iter()
@@ -138,6 +142,7 @@ mod test {
                 (0..=7, 2, Rot::S),
                 (0..=8, 2, Rot::W),
             ],
+            [],
         );
     }
 
@@ -148,10 +153,44 @@ mod test {
             Mat::empty(),
             [
                 (0..=6, 1, Rot::N),
-                (0..=6, 2, Rot::S),
+                (0..=6, 2, Rot::S), // same as N
                 (-2..=7, 3, Rot::E),
-                (-1..=8, 3, Rot::W),
+                (-1..=8, 3, Rot::W), // same as W
             ],
+            [],
+        );
+    }
+
+    #[test]
+    fn test_s_spin_places() {
+        let mut mat = MatBuf::new();
+        // 1 xxxxx..xxx
+        // 0 xxxx..xxxx
+        //   ----------
+        // - 0123456789
+        mat.set(0, 0b1111001111);
+        mat.set(1, 0b1110011111);
+        //
+        assert_places(
+            PieceType::S,
+            &mat,
+            [
+                (0..=4, 3, Rot::N),
+                (5..=5, 2, Rot::N),
+                (6..=7, 3, Rot::N),
+                (0..=4, 4, Rot::S),
+                (5..=5, 3, Rot::S),
+                (6..=7, 4, Rot::S),
+                (-1..=2, 4, Rot::E),
+                (3..=4, 3, Rot::E),
+                (5..=7, 4, Rot::E),
+                (0..=3, 4, Rot::W),
+                (4..=5, 3, Rot::W),
+                (6..=8, 4, Rot::W),
+                // spin
+                (4..=4, 2, Rot::S),
+            ],
+            [(4, 2, Rot::S)],
         );
     }
 }
