@@ -11,23 +11,19 @@ pub type SessionId = String;
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum Message {
     #[serde(rename_all = "camelCase")]
-    RoomData {
-        room_data: RoomData,
-    },
-    #[serde(rename_all = "camelCase")]
     Authenticated {
         session_id: SessionId,
     },
     #[serde(rename_all = "camelCase")]
-    PlayerJoined {
-        player_data: PlayerData,
-    },
-    #[serde(rename_all = "camelCase")]
-    PlayerLeft {
-        session_id: SessionId,
+    RoomData {
+        room_data: RoomData,
     },
     #[serde(rename_all = "camelCase")]
     SettingsChanged {
+        room_data: RoomData,
+    },
+    #[serde(rename_all = "camelCase")]
+    GameReset {
         room_data: RoomData,
     },
     GameStarted,
@@ -39,46 +35,41 @@ pub enum Message {
     #[serde(rename_all = "camelCase")]
     PlayerAction {
         session_id: SessionId,
+        commands: Vec<Command>,
         game_state: GameState,
-        // commands: Command[];
         // events: GameEvent[];
     },
     #[serde(rename_all = "camelCase")]
     PlayerDamageReceived {
         session_id: SessionId,
-        game_state: GameState,
         damage: u32,
+        game_state: GameState,
     },
     #[serde(rename_all = "camelCase")]
     RequestMove {
         game_state: GameState,
-        players: Vec<PlayerData>,
+        // players: PlayerData[];
     },
     #[serde(rename_all = "camelCase")]
     RoundOver {
         winner_id: SessionId,
-        winner_info: PlayerInfo,
-        room_data: RoomData,
+        // winnerInfo: PlayerInfo;
+        // roomData: RoomData;
     },
     #[serde(rename_all = "camelCase")]
     GameOver {
         winner_id: SessionId,
-        winner_info: PlayerInfo,
-        room_data: RoomData,
+        // winnerInfo: PlayerInfo;
+        // roomData: RoomData;
     },
-    #[serde(rename_all = "camelCase")]
-    GameReset {
-        room_data: RoomData,
-    },
-    #[serde(rename_all = "camelCase")]
-    PlayerBanned {/* payload unimplemented */},
-    #[serde(rename_all = "camelCase")]
-    PlayerUnbanned {/* payload unimplemented */},
-    #[serde(rename_all = "camelCase")]
-    HostChanged {/* payload unimplemented */},
+    PlayerJoined {/* payload ignored */},
+    PlayerLeft {/* payload ignored */},
+    PlayerBanned {/* payload ignored */},
+    PlayerUnbanned {/* payload ignored */},
+    HostChanged {/* payload ignored */},
     Error(String),
-    #[serde(untagged)]
-    Other(UnknownMessage),
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,21 +102,21 @@ impl FromStr for UnknownMessage {
 #[serde(rename_all = "camelCase")]
 pub struct RoomData {
     pub id: String,
-    pub host: PlayerInfo,
+    // host: PlayerInfo;
     // private: boolean;
+    pub ft: u32,
     pub initial_pps: f32,
     pub final_pps: f32,
     pub start_margin: f32,
     pub end_margin: f32,
-    pub ft: u32,
     pub max_players: u32,
     pub game_ongoing: bool,
-    pub round_ongoing: bool,
+    // roundOngoing: boolean;
     // startedAt: number | null;
     // endedAt: number | null;
     // lastWinner: SessionId | null;
     pub players: Vec<PlayerData>,
-    pub banned: Vec<PlayerInfo>,
+    // banned: PlayerInfo[];
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,15 +143,21 @@ pub struct PlayerData {
 pub struct GameState {
     pub board: Board,
     pub queue: Queue,
+    pub garbage_queued: Vec<GarbageLine>,
     pub held: Option<Piece>,
-    pub can_hold: bool,
     pub current: PieceData,
+    pub can_hold: bool,
     pub combo: u32,
     pub b2b: bool,
     pub score: u32,
     pub pieces_placed: u32,
-    pub garbage_queued: u32,
     pub dead: bool,
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct GarbageLine {
+    pub delay: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]

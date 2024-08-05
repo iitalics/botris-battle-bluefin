@@ -25,7 +25,8 @@ struct Args {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     pretty_env_logger::formatted_builder()
-        .parse_filters("botris_hello=info")
+        .parse_filters("botris_hello=debug")
+        .format_timestamp_millis()
         .init();
 
     info!("hello");
@@ -62,7 +63,9 @@ async fn main() -> Result<()> {
         }
 
         let ws_msg = ws_msg.to_text().unwrap();
-        let msg = ws_msg.parse::<Message>()?;
+        let msg = ws_msg
+            .parse::<Message>()
+            .with_context(|| format!("{ws_msg:?}"))?;
 
         if session.is_none() {
             match &msg {
@@ -88,9 +91,9 @@ async fn main() -> Result<()> {
                 let new_session = Session::new(session_id, room_data);
                 info!("new session: {}", new_session.session_id);
                 session = Some(new_session);
-            } else {
-                continue;
             }
+
+            continue;
         }
 
         let session = session.as_mut().unwrap();
@@ -101,26 +104,95 @@ async fn main() -> Result<()> {
                 info!("game started");
             }
 
-            Message::GameReset { room_data } => {
-                info!("game reset");
+            Message::RoomData { .. } | Message::Authenticated { .. } => {
+                warn!("didn't expect 'room_data' or 'authenticated'");
+            }
+
+            Message::SettingsChanged { room_data } => {
+                info!("settings changed");
                 session.room_data = room_data;
             }
 
-            Message::PlayerJoined { player_data } => {
-                session.room_data.players.push(player_data);
+            Message::GameReset { room_data } => {
+                info!("game reset");
+                debug!("{room_data:?}");
+                session.room_data = room_data;
             }
 
-            Message::PlayerLeft { session_id } => {
-                session
-                    .room_data
-                    .players
-                    .retain(|p| p.session_id != session_id);
+            Message::RoundStarted {
+                starts_at,
+                room_data,
+            } => {
+                use std::time::{Duration, SystemTime};
+
+                let t0 = SystemTime::now();
+                let t1 = SystemTime::UNIX_EPOCH + Duration::from_millis(starts_at);
+
+                let dt = t1.duration_since(t0).map_or(0.0, |d| d.as_secs_f32());
+                info!("round starting in {dt:.3}");
+                debug!("{room_data:?}");
+                session.room_data = room_data;
+            }
+
+            Message::RoundOver { winner_id } => {
+                if winner_id == session.session_id {
+                    info!("round over: i won");
+                } else {
+                    info!("round over: i lost");
+                }
+            }
+
+            Message::GameOver { winner_id } => {
+                if winner_id == session.session_id {
+                    info!("game over: i won");
+                } else {
+                    info!("game over: i lost");
+                }
+            }
+
+            Message::RequestMove { game_state } => {
+                info!("move requested");
+                info!(
+                    "> {:?} {:?} {:?}",
+                    game_state.current.piece, game_state.held, game_state.queue
+                );
+
+                if game_state.current != PieceData::spawn(game_state.current.piece) {
+                    warn!("not spawn: {:?}", game_state.current);
+                    warn!(" != {:?}", PieceData::spawn(game_state.current.piece));
+                }
+
+                let commands = &[
+                    Command::MoveLeft,
+                    Command::RotateCw,
+                    Command::RotateCcw,
+                    Command::RotateCcw,
+                    Command::MoveRight,
+                    Command::RotateCw,
+                ];
+                let cmsg = ClientMessage::Action { commands };
+                let ws_cmsg = tungstenite::Message::text(cmsg.to_string());
+                info!("< {cmsg:?}");
+                ws.send(ws_cmsg).await.context("send error")?;
+
+                let mut expected_board = game_state.board.clone();
+                let mut piece = game_state.current;
+                for &cmd in commands {
+                    piece = cmd.apply(piece, &game_state.board).unwrap_or(piece);
+                }
+                piece = piece.sonic_drop(&game_state.board);
+                expected_board.place_piece(piece);
+
+                session.expected_board = Some(expected_board);
             }
 
             Message::PlayerAction {
                 session_id,
+                commands,
                 game_state,
             } => {
+                debug!("{session_id}: {commands:?}, {game_state:?}");
+
                 if session_id == session.session_id {
                     if let Some(expected_board) = session.expected_board.take() {
                         if expected_board != game_state.board {
@@ -139,70 +211,34 @@ async fn main() -> Result<()> {
                 }
             }
 
-            Message::RoundStarted {
-                starts_at,
-                room_data,
-            } => {
-                use std::time::{Duration, SystemTime};
-
-                let t0 = SystemTime::now();
-                let t1 = SystemTime::UNIX_EPOCH + Duration::from_millis(starts_at);
-
-                let dt = t1.duration_since(t0).map_or(0.0, |d| d.as_secs_f32());
-                info!("round starting: {dt:.3}");
-                session.room_data = room_data;
-            }
-
-            Message::RequestMove {
+            Message::PlayerDamageReceived {
+                session_id,
+                damage,
                 game_state,
-                players,
             } => {
-                info!("move requested");
-                info!("=> {:?}", game_state.current);
-
-                if game_state.current != PieceData::spawn(game_state.current.piece) {
-                    warn!("not spawn: {:?}", game_state.current);
-                    warn!(" != {:?}", PieceData::spawn(game_state.current.piece));
-                }
-
-                session.room_data.players = players;
-
-                let commands = &[
-                    Command::MoveLeft,
-                    Command::RotateCw,
-                    Command::RotateCcw,
-                    Command::RotateCcw,
-                    Command::MoveRight,
-                    Command::RotateCw,
-                ];
-                let cmsg = ClientMessage::Action { commands };
-                debug!("< {cmsg}");
-                let ws_cmsg = tungstenite::Message::text(cmsg.to_string());
-                ws.send(ws_cmsg).await.context("send error")?;
-
-                let mut expected_board = game_state.board.clone();
-                let mut piece = game_state.current;
-                for &cmd in commands {
-                    piece = cmd.apply(piece, &game_state.board).unwrap_or(piece);
-                }
-                piece = piece.sonic_drop(&game_state.board);
-                expected_board.place_piece(piece);
-
-                session.expected_board = Some(expected_board);
+                debug!("{session_id}: damage {damage:?}, {game_state:?}");
             }
 
-            Message::Error(message) => {
-                warn!("error: {message}");
-            }
-
-            _ => {
+            Message::HostChanged {}
+            | Message::PlayerBanned {}
+            | Message::PlayerJoined {}
+            | Message::PlayerLeft {}
+            | Message::PlayerUnbanned {} => {
                 if log_enabled!(log::Level::Debug) {
                     debug!("ignoring: {msg:?}");
                 }
             }
-        }
 
-        //session.print_game();
+            Message::Error(reason) => {
+                error!("error: {reason}");
+            }
+
+            Message::Unknown => {
+                let msg = ws_msg.parse::<UnknownMessage>().unwrap();
+                warn!("unknown message: {:?}", msg.type_);
+                debug!("{ws_msg}");
+            }
+        }
     }
 
     info!("bye");
@@ -223,76 +259,6 @@ impl Session {
             session_id,
             room_data,
             expected_board: None,
-        }
-    }
-
-    fn print_game(&self) {
-        let players = &self.room_data.players;
-
-        trace!("printing {} players", players.len());
-        if players.is_empty() {
-            return;
-        }
-
-        let mut lines: Vec<Vec<String>> = players.iter().map(|_| vec![]).collect();
-
-        for (lns, pl) in lines.iter_mut().zip(players.iter()) {
-            let mut board_lns = [[" "; 12]; 20];
-            for ln in board_lns.iter_mut() {
-                ln[0] = "|";
-                ln[11] = "|";
-            }
-
-            let mut held = "";
-            let mut current = "";
-            let mut queue = String::new();
-
-            if let Some(game) = &pl.game_state {
-                for (y, row) in game.board.rows().iter().enumerate() {
-                    if y >= 20 {
-                        break;
-                    }
-                    for (x, &block) in row.iter().enumerate() {
-                        if x >= 10 {
-                            break;
-                        }
-                        if let Some(block) = block {
-                            board_lns[19 - y][x + 1] = block.name();
-                        }
-                    }
-                }
-
-                if let Some(p) = game.held {
-                    held = p.name();
-                }
-                current = game.current.piece.name();
-                queue = game.queue.iter().map(|p| p.name()).collect();
-            }
-
-            let id = &pl.session_id;
-            let me = if *id == self.session_id { "*" } else { "" };
-            lns.push(format!("id: {me}{id}"));
-            lns.push(format!("queue: [{held}]({current}){queue}"));
-            lns.push(["-"; 12].into_iter().collect());
-            lns.extend(board_lns.into_iter().map(|ln| ln.into_iter().collect()));
-            lns.push(["-"; 12].into_iter().collect());
-        }
-
-        let widths: Vec<usize> = lines
-            .iter()
-            .map(|lns| {
-                let width = lns.iter().map(|ln| ln.len()).max().unwrap_or(0);
-                width + 2
-            })
-            .collect();
-
-        trace!("widths: {widths:?}");
-
-        for l in 0..lines[0].len() {
-            for (i, lns) in lines.iter().enumerate() {
-                print!("{:1$}", lns[l], widths[i]);
-            }
-            println!();
         }
     }
 }

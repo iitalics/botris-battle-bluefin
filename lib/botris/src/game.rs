@@ -343,21 +343,22 @@ pub enum Command {
     RotateCcw,
     Drop,
     SonicDrop,
+    HardDrop,
 }
 
 impl Command {
     pub fn apply(self, piece: PieceData, board: &Board) -> Option<PieceData> {
         match self {
-            Command::Hold => {
-                /* queue isn't implemented */
-                None
-            }
             Command::MoveLeft => piece.try_offset((-1, 0), board),
             Command::MoveRight => piece.try_offset((1, 0), board),
             Command::Drop => piece.try_offset((0, -1), board),
             Command::RotateCw => piece.try_rotate_cw(board),
             Command::RotateCcw => piece.try_rotate_ccw(board),
             Command::SonicDrop => Some(piece.sonic_drop(board)),
+            /* TODO */
+            Command::Hold => None,
+            /* TODO */
+            Command::HardDrop => Some(piece.sonic_drop(board)),
         }
     }
 }
