@@ -127,7 +127,7 @@ impl PieceData {
     }
 
     pub fn try_rotate_ccw(self, board: &Board) -> Option<Self> {
-        self.try_rotate(self.rotation.cw(), board)
+        self.try_rotate(self.rotation.ccw(), board)
     }
 
     fn try_rotate(self, new_r: Rotation, board: &Board) -> Option<Self> {
