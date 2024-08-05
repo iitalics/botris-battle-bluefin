@@ -5,7 +5,7 @@ use core::{cmp, ops};
 
 use crate::input::{Dir, Input, Turn};
 use crate::matrix::Mat;
-use crate::piece::{Piece, Pos, Shape, Spawn, WallKicks};
+use crate::piece::{Cells, Piece, Pos, Shape, Spawn, WallKicks};
 
 type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AHasher>>;
 
@@ -221,13 +221,17 @@ mod test {
 
 /// Returns the minimal input sequence to reach `target` from the piece spawn location. If
 /// a reachable path is not found then returns `None`.
+///
+/// The input sequence does *not* include the `SonicDrop` that would place it on the
+/// ground; it is implied that this would be accomplished by a hard drop always performed.
 pub fn reach<T>(matrix: &Mat, target: Piece<T>) -> Option<Vec<Input>>
 where
     T: Shape + Spawn + WallKicks + Clone,
 {
+    let target_cells = target.cells();
     ShortestPath::new(matrix, target.shape)
-        .find(|node| node.pos == target.pos)
-        .map(|node| node.inputs())
+        .find(|(cells, _)| *cells == target_cells)
+        .map(|(_, node)| node.inputs())
 }
 
 /// Implements Djikstra's Algorithm in order to list all shortest paths to reachable
@@ -261,43 +265,39 @@ impl<T: Shape + Clone> ShortestPath<'_, T> {
 }
 
 impl<T: Shape + WallKicks + Clone> Iterator for ShortestPath<'_, T> {
-    type Item = ShortestPathNode;
+    type Item = (Cells, ShortestPathNode);
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let node = self.unvisited.pop()?;
-            let piece = Piece::new(self.piece_type.clone(), node.pos);
+        let node = self.unvisited.pop()?;
+        let piece = Piece::new(self.piece_type.clone(), node.pos);
 
-            let mut cw = piece.clone();
-            if cw.try_rotate(self.matrix, Turn::Cw).is_some() {
-                self.push(&node, Input::Cw, cw.pos);
-            }
-
-            let mut ccw = piece.clone();
-            if ccw.try_rotate(self.matrix, Turn::Ccw).is_some() {
-                self.push(&node, Input::Ccw, ccw.pos);
-            }
-
-            let mut left = piece.clone();
-            if left.try_shift(self.matrix, Dir::Left).is_some() {
-                self.push(&node, Input::Left, left.pos);
-            }
-
-            let mut right = piece.clone();
-            if right.try_shift(self.matrix, Dir::Right).is_some() {
-                self.push(&node, Input::Right, right.pos);
-            }
-
-            let mut sd = piece;
-            let (dy, _) = sd.sonic_drop(self.matrix);
-            if dy != 0 {
-                self.push(&node, Input::SonicDrop, sd.pos);
-                // don't return nodes unless they are on the ground (dy = 0)
-                continue;
-            }
-
-            return Some(node);
+        let mut cw = piece.clone();
+        if cw.try_rotate(self.matrix, Turn::Cw).is_some() {
+            self.push(&node, Input::Cw, cw.pos);
         }
+
+        let mut ccw = piece.clone();
+        if ccw.try_rotate(self.matrix, Turn::Ccw).is_some() {
+            self.push(&node, Input::Ccw, ccw.pos);
+        }
+
+        let mut left = piece.clone();
+        if left.try_shift(self.matrix, Dir::Left).is_some() {
+            self.push(&node, Input::Left, left.pos);
+        }
+
+        let mut right = piece.clone();
+        if right.try_shift(self.matrix, Dir::Right).is_some() {
+            self.push(&node, Input::Right, right.pos);
+        }
+
+        let mut sd = piece;
+        let (dy, cells) = sd.sonic_drop(self.matrix);
+        if dy != 0 {
+            self.push(&node, Input::SonicDrop, sd.pos);
+        }
+
+        return Some((cells, node));
     }
 }
 
@@ -336,10 +336,6 @@ impl ShortestPathNode {
         let mut n_shift = self.n_shift;
         let mut n_rotate = self.n_rotate;
         let mut n_drop = self.n_drop;
-        // TODO:
-        // - "coalesce" repeated shifts in the same direction
-        // - omit sonic-drop when it is the last input pressed; only weigh it if there are
-        //   inputs afterwards
         match input {
             Input::Left | Input::Right => n_shift += 1,
             Input::Cw | Input::Ccw => n_rotate += 1,
@@ -416,7 +412,7 @@ mod test_reach {
         let inputs = reach(mat, tgt).unwrap();
         assert_eq!(inputs, {
             use Input::*;
-            [Left, Left, Left, SonicDrop]
+            [Left, Left, Left]
         });
     }
 
@@ -427,7 +423,7 @@ mod test_reach {
         let inputs = reach(mat, tgt).unwrap();
         assert_eq!(inputs, {
             use Input::*;
-            [Left, Left, Left, SonicDrop, Cw]
+            [Left, Left, Left, Cw, Left]
         });
     }
 
