@@ -1,7 +1,7 @@
 //! Botris API example.
 
 #[macro_use]
-extern crate log;
+extern crate tracing;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -24,12 +24,15 @@ struct Args {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    pretty_env_logger::formatted_builder()
-        .parse_filters("botris_hello=debug")
-        .format_timestamp_millis()
+    tracing_subscriber::fmt()
+        //.with_env_filter("botris=debug")
+        .with_env_filter("botris=info")
+        .with_ansi(true)
+        .with_timer(tracing_subscriber::fmt::time::uptime())
+        .compact()
         .init();
 
-    info!("hello");
+    debug!("hello");
 
     let mut ws = {
         let Args { room_key, token } = Args::parse();
@@ -77,7 +80,7 @@ async fn main() -> Result<()> {
                 }
                 _ => {
                     trace!("{msg:?}");
-                    if log_enabled!(log::Level::Warn) {
+                    if enabled!(tracing::Level::WARN) {
                         if let Ok(msg) = ws_msg.parse::<UnknownMessage>() {
                             warn!("got {:?} message but wasn't authenticated", msg.type_);
                         }
@@ -224,9 +227,7 @@ async fn main() -> Result<()> {
             | Message::PlayerJoined {}
             | Message::PlayerLeft {}
             | Message::PlayerUnbanned {} => {
-                if log_enabled!(log::Level::Debug) {
-                    debug!("ignoring: {msg:?}");
-                }
+                debug!("ignoring: {msg:?}");
             }
 
             Message::Error(reason) => {
