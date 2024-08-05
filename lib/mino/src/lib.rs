@@ -17,6 +17,9 @@ pub use piece::{Cells, Pos};
 pub mod places;
 pub use places::{places, reach, Places};
 
+pub mod game_state;
+pub use game_state::GameState;
+
 pub mod standard_rules;
 
 #[cfg(test)]
