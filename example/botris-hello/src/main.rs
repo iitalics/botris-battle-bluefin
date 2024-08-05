@@ -248,7 +248,7 @@ impl Session {
             let mut queue = String::new();
 
             if let Some(game) = &pl.game_state {
-                for (y, row) in game.board.as_ref().iter().enumerate() {
+                for (y, row) in game.board.rows().iter().enumerate() {
                     if y >= 20 {
                         break;
                     }

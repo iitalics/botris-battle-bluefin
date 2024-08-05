@@ -1,7 +1,6 @@
 //! Tetris implementation for Botris.
 
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroU8;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(transparent)]
@@ -10,6 +9,14 @@ pub struct Board(pub Vec<[Block; 10]>);
 impl Board {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn rows(&self) -> &[[Block; 10]] {
+        &self.0
+    }
+
+    pub fn len(&self) -> i8 {
+        self.rows().len() as i8
     }
 
     pub fn check_collision(&self, piece_data: PieceData) -> bool {
@@ -31,25 +38,16 @@ impl Board {
     }
 }
 
-impl AsRef<[[Block; 10]]> for Board {
-    fn as_ref(&self) -> &[[Block; 10]] {
-        &self.0
-    }
-}
-
 impl std::ops::Index<(i8, i8)> for Board {
     type Output = Block;
     fn index(&self, (x, y): (i8, i8)) -> &Block {
         if x < 0 || x >= 10 || y < 0 {
             return &Some(NonEmptyBlock::G);
         }
-        let x = x as usize;
-        let y = y as usize;
-        let rows = self.as_ref();
-        if y >= rows.len() {
-            return &None;
+        match self.rows().get(y as usize) {
+            Some(row) => &row[x as usize],
+            None => &None,
         }
-        &rows[y][x]
     }
 }
 
@@ -229,18 +227,6 @@ impl Piece {
     }
 }
 
-impl From<Piece> for u8 {
-    fn from(v: Piece) -> Self {
-        v as u8
-    }
-}
-
-impl From<Piece> for NonZeroU8 {
-    fn from(v: Piece) -> Self {
-        NonZeroU8::new(v.into()).unwrap()
-    }
-}
-
 impl std::fmt::Display for Piece {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
@@ -275,18 +261,6 @@ impl Default for NonEmptyBlock {
 impl From<Piece> for NonEmptyBlock {
     fn from(v: Piece) -> Self {
         unsafe { std::mem::transmute(v) }
-    }
-}
-
-impl From<NonEmptyBlock> for u8 {
-    fn from(v: NonEmptyBlock) -> Self {
-        v as u8
-    }
-}
-
-impl From<NonEmptyBlock> for NonZeroU8 {
-    fn from(v: NonEmptyBlock) -> Self {
-        NonZeroU8::new(v.into()).unwrap()
     }
 }
 
