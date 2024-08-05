@@ -135,6 +135,23 @@ async fn main() -> Result<()> {
                 info!("round starting in {dt:.3}");
                 debug!("{room_data:?}");
                 session.room_data = room_data;
+
+                let game_state = session.room_data.players.iter().find_map(|p| {
+                    if p.session_id == session.session_id {
+                        p.game_state.as_ref()
+                    } else {
+                        None
+                    }
+                });
+
+                if let Some(game_state) = game_state {
+                    info!(
+                        "> {:?} {:?} {:?}",
+                        &game_state.current.piece, &game_state.held, &game_state.queue
+                    );
+                } else {
+                    warn!("did not get to peek at pre-round game state");
+                }
             }
 
             Message::RoundOver { winner_id } => {
