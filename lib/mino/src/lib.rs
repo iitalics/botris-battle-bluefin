@@ -14,6 +14,9 @@ pub use input::{Dir, Input, Rot, Turn};
 pub mod piece;
 pub use piece::{Cells, Pos};
 
+pub mod queue;
+pub use queue::Queue;
+
 pub mod places;
 pub use places::{places, reach, Places};
 
