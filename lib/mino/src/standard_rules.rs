@@ -27,6 +27,7 @@ impl fmt::Display for PieceType {
 }
 
 pub type Piece = super::piece::Piece<PieceType>;
+pub type Queue<'a> = super::queue::Queue<'a, PieceType>;
 
 // w=4
 // ----------
