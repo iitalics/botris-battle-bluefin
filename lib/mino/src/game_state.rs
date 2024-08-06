@@ -96,6 +96,7 @@ impl AttackTable {
 mod test {
     use super::*;
     #[test]
+    #[allow(clippy::bool_assert_comparison)]
     fn test_attacks() {
         let mut game = GameState::new();
         game.send(2, false, &STANDARD_ATTACK_TABLE);

@@ -34,6 +34,9 @@ impl Mat {
         self.rows().len() as i8
     }
 
+    /// # Safety
+    ///
+    /// - `y` must be within bounds (0 <= y <= len()).
     pub unsafe fn get_unchecked(&self, y: i8) -> u16 {
         *self.rows().get_unchecked(y as usize)
     }
@@ -91,7 +94,7 @@ impl MatBuf {
 
     /// Remove rows that are full above row `y_start`, moving any rows above them into
     /// their place. Returns the number of rows removed.
-    pub fn clear_lines(&mut self, y_start: u8) -> u8 {
+    pub fn clear_lines(&mut self, y_start: i8) -> u8 {
         let rows = self.rows_mut();
         let y_end = rows.len();
         let y_start = usize::try_from(y_start).unwrap_or(0).min(y_end);
@@ -149,7 +152,7 @@ mod test {
         assert_eq!(mat.get(1), EMPTY);
         mat.set(2, 0b100);
         assert_eq!(mat.get(0), EMPTY | 0b1);
-        assert_eq!(mat.get(1), EMPTY | 0b0);
+        assert_eq!(mat.get(1), EMPTY);
         assert_eq!(mat.get(2), EMPTY | 0b100);
         assert_eq!(mat.get(3), EMPTY);
         mat.set(0, 0b110000);

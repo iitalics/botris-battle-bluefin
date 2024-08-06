@@ -14,7 +14,7 @@ type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AH
 /// Returns an iterator that yields all of the reachable places on `matrix` from piece
 /// `piece_type`, starting at its spawn location. If the spawn location is blocked then
 /// this will be empty (or you can check with `is_dead`).
-pub fn places<'m, T: Shape + Clone + Spawn>(matrix: &'m Mat, piece_type: T) -> Places<'m, T> {
+pub fn places<T: Shape + Clone + Spawn>(matrix: &Mat, piece_type: T) -> Places<'_, T> {
     let mut places = Places {
         matrix,
         piece_type: piece_type.clone(),
@@ -297,7 +297,7 @@ impl<T: Shape + WallKicks + Clone> Iterator for ShortestPath<'_, T> {
             self.push(&node, Input::SonicDrop, sd.pos);
         }
 
-        return Some((cells, node));
+        Some((cells, node))
     }
 }
 

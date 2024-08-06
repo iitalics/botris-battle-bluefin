@@ -46,8 +46,8 @@ pub type Piece = super::piece::Piece<PieceType>;
 // ....OO.... 19
 // 0123456789
 
-const SPAWN_2: (i8, i8) = (10 / 2 - 2 / 2, 20);
-const SPAWN_3_4: (i8, i8) = (10 / 2 - 4 / 2, 20);
+const SPAWN_2: (i8, i8) = (4, 20);
+const SPAWN_3_4: (i8, i8) = (3, 20);
 
 impl Spawn for PieceType {
     fn spawn(&self) -> (i8, i8) {

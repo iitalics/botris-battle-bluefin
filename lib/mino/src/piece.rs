@@ -206,12 +206,13 @@ impl fmt::Debug for Cells {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let mut f = f.debug_list();
                 for y in 0..self.h {
-                    let mut bs = [b'.'; 4];
-                    for x in 0..self.w {
+                    let bs: [u8; 4] = core::array::from_fn(|x| {
                         if self.bits & (1 << (y * 4 + x)) != 0 {
-                            bs[x] = b'x';
+                            b'x'
+                        } else {
+                            b'.'
                         }
-                    }
+                    });
                     let s = str::from_utf8(&bs[..self.w]).unwrap();
                     f.entry(&s);
                 }
