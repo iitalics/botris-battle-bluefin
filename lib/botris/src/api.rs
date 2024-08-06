@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use crate::game::{Board, Command, Piece, PieceData, Queue};
+use crate::game::{Command, GameState};
 
 pub type SessionId = String;
 
@@ -136,28 +136,6 @@ pub struct PlayerData {
     pub info: PlayerInfo,
     pub wins: u32,
     pub game_state: Option<GameState>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GameState {
-    pub board: Board,
-    pub queue: Queue,
-    pub garbage_queued: Vec<GarbageLine>,
-    pub held: Option<Piece>,
-    pub current: PieceData,
-    pub can_hold: bool,
-    pub combo: u32,
-    pub b2b: bool,
-    pub score: u32,
-    pub pieces_placed: u32,
-    pub dead: bool,
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-#[repr(transparent)]
-pub struct GarbageLine {
-    pub delay: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]

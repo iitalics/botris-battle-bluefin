@@ -114,41 +114,46 @@ impl PieceData {
         }
     }
 
-    pub fn try_offset(self, ofs: (i8, i8), board: &Board) -> Option<Self> {
+    pub fn try_offset(&mut self, ofs: (i8, i8), board: &Board) -> bool {
         let moved = self.offset(ofs);
         if !board.check_collision(moved) {
-            return Some(moved);
+            *self = moved;
+            return true;
         }
-        None
+        false
     }
 
-    pub fn try_rotate_cw(self, board: &Board) -> Option<Self> {
+    pub fn try_rotate_cw(&mut self, board: &Board) -> bool {
         self.try_rotate(self.rotation.cw(), board)
     }
 
-    pub fn try_rotate_ccw(self, board: &Board) -> Option<Self> {
+    pub fn try_rotate_ccw(&mut self, board: &Board) -> bool {
         self.try_rotate(self.rotation.ccw(), board)
     }
 
-    fn try_rotate(self, new_r: Rotation, board: &Board) -> Option<Self> {
+    fn try_rotate(&mut self, new_r: Rotation, board: &Board) -> bool {
         let old_r = self.rotation;
         for ofs in self.piece.wall_kicks(old_r, new_r) {
             let kicked = self.rotate(new_r).offset(ofs);
             if !board.check_collision(kicked) {
-                return Some(kicked);
+                *self = kicked;
+                return true;
             }
         }
-        None
+        false
     }
 
-    pub fn sonic_drop(mut self, board: &Board) -> Self {
+    pub fn sonic_drop(&mut self, board: &Board) -> i8 {
+        let mut dy = 0;
         loop {
-            let drop = self.offset((0, -1));
+            let drop = self.offset((0, dy - 1));
             if board.check_collision(drop) {
-                return self;
+                break;
             }
-            self = drop;
+            dy -= 1;
         }
+        *self = self.offset((0, dy));
+        dy
     }
 
     pub fn coords(self) -> impl Iterator<Item = (i8, i8)> {
@@ -332,6 +337,28 @@ impl std::fmt::Display for Rotation {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameState {
+    pub board: Board,
+    pub queue: Queue,
+    pub garbage_queued: Vec<GarbageLine>,
+    pub held: Option<Piece>,
+    pub current: PieceData,
+    pub can_hold: bool,
+    pub combo: u32,
+    pub b2b: bool,
+    pub score: u32,
+    pub pieces_placed: u32,
+    pub dead: bool,
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct GarbageLine {
+    pub delay: u32,
+}
+
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(u8)]
@@ -346,19 +373,27 @@ pub enum Command {
     HardDrop,
 }
 
-impl Command {
-    pub fn apply(self, piece: PieceData, board: &Board) -> Option<PieceData> {
-        match self {
-            Command::MoveLeft => piece.try_offset((-1, 0), board),
-            Command::MoveRight => piece.try_offset((1, 0), board),
-            Command::Drop => piece.try_offset((0, -1), board),
-            Command::RotateCw => piece.try_rotate_cw(board),
-            Command::RotateCcw => piece.try_rotate_ccw(board),
-            Command::SonicDrop => Some(piece.sonic_drop(board)),
-            /* TODO */
-            Command::Hold => None,
-            /* TODO */
-            Command::HardDrop => Some(piece.sonic_drop(board)),
+impl GameState {
+    pub fn play(&mut self, cmd: Command) -> bool {
+        match cmd {
+            Command::MoveLeft => self.current.try_offset((-1, 0), &self.board),
+            Command::MoveRight => self.current.try_offset((1, 0), &self.board),
+            Command::Drop => self.current.try_offset((-1, 0), &self.board),
+            Command::RotateCw => self.current.try_rotate_cw(&self.board),
+            Command::RotateCcw => self.current.try_rotate_ccw(&self.board),
+            Command::SonicDrop => self.current.sonic_drop(&self.board) > 0,
+            Command::Hold => {
+                /* TODO */
+                self.can_hold
+            }
+            Command::HardDrop => {
+                self.current.sonic_drop(&self.board);
+                self.board.place_piece(self.current);
+                self.pieces_placed += 1;
+                // TODO: line clears
+                // TODO: attack scoring
+                true
+            }
         }
     }
 }
