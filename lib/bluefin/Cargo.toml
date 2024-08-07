@@ -1,0 +1,11 @@
+[package]
+name = "bluefin"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mino = {path = "../mino"}
+
+tracing = {version = "0.1"}
+#thiserror = {version = "1.0"}
+bumpalo = {version = "3.16"}
