@@ -11,7 +11,7 @@ use tokio_tungstenite::tungstenite;
 use tungstenite::http::Uri;
 
 use botris::api::{ClientMessage, Message, RoomData, SessionId, UnknownMessage};
-use botris::game::{Board, Command, PieceData};
+use botris::game::Command;
 
 /// Botris API example.
 #[derive(Parser, Debug)]
@@ -26,7 +26,7 @@ struct Args {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         //.with_env_filter("botris=debug")
-        .with_env_filter("botris=info")
+        .with_env_filter("botris=info,bluefin=debug")
         .with_ansi(true)
         .with_timer(tracing_subscriber::fmt::time::uptime())
         .compact()
@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
                 });
 
                 if let Some(game_state) = game_state {
-                    info!(
+                    debug!(
                         "> {:?} {:?} {:?}",
                         &game_state.current.piece, &game_state.held, &game_state.queue
                     );
@@ -171,39 +171,69 @@ async fn main() -> Result<()> {
             }
 
             Message::RequestMove { game_state } => {
-                info!("move requested");
-                info!(
+                debug!("move requested");
+                debug!(
                     "> {:?} {:?} {:?}",
                     game_state.current.piece, game_state.held, game_state.queue
                 );
 
-                if game_state.current != PieceData::spawn(game_state.current.piece) {
-                    warn!("not spawn: {:?}", game_state.current);
-                    warn!(" != {:?}", PieceData::spawn(game_state.current.piece));
+                let result = {
+                    fn mino_piece_type(pc: botris::Piece) -> mino::standard_rules::PieceType {
+                        match pc {
+                            botris::Piece::I => mino::standard_rules::I,
+                            botris::Piece::J => mino::standard_rules::J,
+                            botris::Piece::L => mino::standard_rules::L,
+                            botris::Piece::O => mino::standard_rules::O,
+                            botris::Piece::S => mino::standard_rules::S,
+                            botris::Piece::T => mino::standard_rules::T,
+                            botris::Piece::Z => mino::standard_rules::Z,
+                        }
+                    }
+
+                    fn botris_command(inp: mino::input::Input) -> botris::Command {
+                        match inp {
+                            mino::Input::Left => botris::Command::MoveLeft,
+                            mino::Input::Right => botris::Command::MoveRight,
+                            mino::Input::Cw => botris::Command::RotateCw,
+                            mino::Input::Ccw => botris::Command::RotateCcw,
+                            mino::Input::SonicDrop => botris::Command::SonicDrop,
+                        }
+                    }
+
+                    let current = mino_piece_type(game_state.current.piece);
+                    let hold = game_state.held.map(mino_piece_type);
+                    let queue = game_state
+                        .queue
+                        .iter()
+                        .map(|&x| mino_piece_type(x))
+                        .collect::<Vec<_>>();
+
+                    let mut matrix = mino::MatBuf::new();
+                    for (y, row) in game_state.board.rows().iter().enumerate() {
+                        for (x, cell) in row.iter().enumerate() {
+                            if cell.is_some() {
+                                matrix.set(y as i8, 1u16 << x);
+                            }
+                        }
+                    }
+
+                    bluefin::bot(current, &queue, hold, &matrix).map(|(hold, inputs)| {
+                        let mut cmds = Vec::with_capacity(inputs.len() + 1);
+                        if hold {
+                            cmds.push(Command::Hold);
+                        }
+                        cmds.extend(inputs.iter().map(|&i| botris_command(i)));
+                        cmds
+                    })
+                };
+
+                if let Some(commands) = &result {
+                    let msg = ClientMessage::Action { commands };
+                    let ws_msg = tungstenite::Message::text(msg.to_string());
+                    ws.send(ws_msg).await.context("send error")?;
+                } else {
+                    warn!("bot did not return a move; giving up");
                 }
-
-                let commands = &[
-                    Command::MoveLeft,
-                    Command::RotateCw,
-                    Command::RotateCcw,
-                    Command::RotateCcw,
-                    Command::MoveRight,
-                    Command::RotateCw,
-                ];
-                let cmsg = ClientMessage::Action { commands };
-                let ws_cmsg = tungstenite::Message::text(cmsg.to_string());
-                info!("< {cmsg:?}");
-                ws.send(ws_cmsg).await.context("send error")?;
-
-                let mut expected_board = game_state.board.clone();
-                let mut piece = game_state.current;
-                for &cmd in commands {
-                    piece = cmd.apply(piece, &game_state.board).unwrap_or(piece);
-                }
-                piece = piece.sonic_drop(&game_state.board);
-                expected_board.place_piece(piece);
-
-                session.expected_board = Some(expected_board);
             }
 
             Message::PlayerAction {
@@ -212,23 +242,6 @@ async fn main() -> Result<()> {
                 game_state,
             } => {
                 debug!("{session_id}: {commands:?}, {game_state:?}");
-
-                if session_id == session.session_id {
-                    if let Some(expected_board) = session.expected_board.take() {
-                        if expected_board != game_state.board {
-                            warn!("board differed from expected");
-                            warn!("   {:?}", game_state.board);
-                            warn!("!= {:?}", expected_board);
-                        }
-                    }
-                }
-
-                for pl in session.room_data.players.iter_mut() {
-                    if pl.session_id == session_id {
-                        pl.game_state = Some(game_state);
-                        break;
-                    }
-                }
             }
 
             Message::PlayerDamageReceived {
@@ -268,7 +281,6 @@ async fn main() -> Result<()> {
 struct Session {
     session_id: SessionId,
     room_data: RoomData,
-    expected_board: Option<Board>,
 }
 
 impl Session {
@@ -276,7 +288,6 @@ impl Session {
         Self {
             session_id,
             room_data,
-            expected_board: None,
         }
     }
 }
