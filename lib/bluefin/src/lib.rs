@@ -68,7 +68,7 @@ pub fn bot(
                 }
 
                 if node.children.get().is_empty() {
-                    let children = node.alloc_chilren(&alo);
+                    let children = node.alloc_children(&alo);
                     node.children.set(alo.alloc_slice_copy(&children));
                     expanded += node.children.get().len();
                     total_expanded += expanded;
@@ -136,7 +136,7 @@ impl<'a> Node<'a> {
         })
     }
 
-    fn alloc_chilren(&'a self, alo: &'a Alo) -> Vec<&'a Node<'a>> {
+    fn alloc_children(&'a self, alo: &'a Alo) -> Vec<&'a Node<'a>> {
         let mut children = vec![];
         let mut new_matrix = MatBuf::new();
 
