@@ -77,10 +77,12 @@ fn count_blocks(mat: &Mat) -> i32 {
 
 fn row_transitions(mat: &Mat) -> i32 {
     let mut trans = 0;
-    let mut prev = mino::matrix::EMPTY;
+    let mut prev = mino::matrix::FULL;
     for &row in mat.rows() {
         trans += (row ^ prev).count_ones() as i32;
         prev = row;
     }
+    // trans += (mino::matrix::EMPTY ^ prev).count_ones() as i32;
+    trans += (prev << 6).count_ones() as i32;
     trans
 }
