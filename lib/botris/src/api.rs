@@ -105,10 +105,11 @@ pub struct RoomData {
     // host: PlayerInfo;
     // private: boolean;
     pub ft: u32,
-    pub initial_pps: f32,
-    pub final_pps: f32,
-    pub start_margin: f32,
-    pub end_margin: f32,
+    pub pps: f32,
+    // initialMessiness: number;
+    // finalMessiness: number;
+    // startMargin: number;
+    // endMargin: number;
     pub max_players: u32,
     pub game_ongoing: bool,
     // roundOngoing: boolean;
