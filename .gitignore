@@ -1,3 +1,5 @@
 **/target
 /Cargo.lock
 /.api-token
+/.room-key
+/.nuketris
