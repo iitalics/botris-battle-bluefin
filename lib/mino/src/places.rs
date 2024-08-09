@@ -63,7 +63,7 @@ impl<T: Shape + Clone> Places<'_, T> {
 #[derive(Copy, Clone, Debug)]
 pub struct PlacesResult<T> {
     pub piece: Piece<T>,
-    pub is_immobile: bool,
+    pub cells: Cells,
 }
 
 impl<T> From<PlacesResult<T>> for Piece<T> {
@@ -118,8 +118,7 @@ impl<T: Shape + Clone + WallKicks> Iterator for Places<'_, T> {
                 continue;
             }
 
-            let is_immobile = cells.immobile(self.matrix);
-            return Some(PlacesResult { piece, is_immobile });
+            return Some(PlacesResult { piece, cells });
         }
     }
 }
@@ -145,7 +144,8 @@ mod test {
         let immobile = immobile.into_iter().map(Pos::from).collect::<Vec<_>>();
         let actual_places = places(mat, piece).map(|f| {
             let pos = f.pos;
-            assert_eq!(f.is_immobile, immobile.contains(&pos), "{pos:?}");
+            let imm = f.cells.immobile(mat);
+            assert_eq!(imm, immobile.contains(&pos), "{pos:?}");
             pos
         });
         let expected_places = expected
