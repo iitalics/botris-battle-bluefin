@@ -7,7 +7,7 @@ use super::piece::{Cells, Shape, Spawn, WallKicks};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(u8)]
-pub enum PieceType {
+pub enum Piece {
     I = 0,
     J = 1,
     L = 2,
@@ -17,17 +17,25 @@ pub enum PieceType {
     Z = 6,
 }
 
-pub use PieceType::*;
+pub use Piece::*;
 
-impl fmt::Display for PieceType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: PieceType::name()
-        <Self as fmt::Debug>::fmt(self, f)
+static PIECE_NAMES: &[u8] = b"IJLOSTZ";
+
+impl Piece {
+    pub fn name(self) -> &'static str {
+        let i = self as usize;
+        core::str::from_utf8(&PIECE_NAMES[i..][..1]).unwrap()
     }
 }
 
-pub type Piece = super::piece::Piece<PieceType>;
-pub type Queue<'a> = super::queue::Queue<'a, PieceType>;
+impl fmt::Display for Piece {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+pub type FallingPiece = super::piece::FallingPiece<Piece>;
+pub type Queue<'a> = super::queue::Queue<'a, Piece>;
 
 // w=4
 // ----------
@@ -50,9 +58,9 @@ pub type Queue<'a> = super::queue::Queue<'a, PieceType>;
 const SPAWN_2: (i8, i8) = (4, 20);
 const SPAWN_3_4: (i8, i8) = (3, 20);
 
-impl Spawn for PieceType {
+impl Spawn for Piece {
     fn spawn(&self) -> (i8, i8) {
-        if *self == PieceType::O {
+        if *self == Piece::O {
             SPAWN_2
         } else {
             SPAWN_3_4
@@ -126,7 +134,7 @@ static CELLS: [[Cells; 4]; 7] = [
     ],
 ];
 
-impl Shape for PieceType {
+impl Shape for Piece {
     fn cells(&self, r: Rot) -> Cells {
         CELLS[*self as usize][r as usize]
     }
@@ -170,11 +178,13 @@ static I_WALLKICKS: [[[(i8, i8); 5]; 2]; 4] = [
     ],
 ];
 
-impl WallKicks for PieceType {
+// TODO: O_WALLKICKS
+
+impl WallKicks for Piece {
     fn wall_kicks(&self, r: Rot, dr: Turn) -> &'static [(i8, i8)] {
         let i = r as usize;
         let j = (dr as usize) >> 1; // Cw => 0, Ccw => 1
-        if *self == PieceType::I {
+        if *self == Piece::I {
             &I_WALLKICKS[i][j]
         } else {
             &WALLKICKS[i][j]
@@ -190,21 +200,14 @@ mod test {
     use crate::test::assert_same_set;
     use std::format;
 
-    fn cells(p: PieceType, x: i8, y: i8, r: Rot) -> Cells {
-        Piece {
-            shape: p,
-            pos: (x, y, r).into(),
-        }
-        .cells()
+    fn cells(p: Piece, x: i8, y: i8, r: Rot) -> Cells {
+        FallingPiece::new(p, (x, y, r)).cells()
     }
 
-    fn assert_cells(p: PieceType, x: i8, y: i8, r: Rot, coords: [(i8, i8); 4]) {
-        let piece = Piece {
-            shape: p,
-            pos: (x, y, r).into(),
-        };
-        let cells = piece.cells();
-        assert_same_set(cells.coords(), coords, &format!("{piece:?}"));
+    fn assert_cells(p: Piece, x: i8, y: i8, r: Rot, coords: [(i8, i8); 4]) {
+        let fp = FallingPiece::new(p, (x, y, r));
+        let cells = fp.cells();
+        assert_same_set(cells.coords(), coords, &format!("{fp:?}"));
 
         let (mut x0, mut y0, mut x1, mut y1) = (i8::MAX, i8::MAX, i8::MIN, i8::MIN);
         for (cx, cy) in coords {
@@ -213,7 +216,7 @@ mod test {
             x1 = x1.max(cx + 1);
             y1 = y1.max(cy + 1);
         }
-        assert_eq!(cells.extents(), (x0..x1, y0..y1), "{piece:?}");
+        assert_eq!(cells.extents(), (x0..x1, y0..y1), "{fp:?}");
     }
 
     #[test]
@@ -254,13 +257,13 @@ mod test {
 
     #[test]
     fn test_spawn() {
-        assert_eq!(Piece::spawn(I).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(J).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(L).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(O).pos, Pos::from((4, 20, Rot::N)));
-        assert_eq!(Piece::spawn(S).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(T).pos, Pos::from((3, 20, Rot::N)));
-        assert_eq!(Piece::spawn(Z).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(FallingPiece::spawn(I).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(FallingPiece::spawn(J).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(FallingPiece::spawn(L).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(FallingPiece::spawn(O).pos, Pos::from((4, 20, Rot::N)));
+        assert_eq!(FallingPiece::spawn(S).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(FallingPiece::spawn(T).pos, Pos::from((3, 20, Rot::N)));
+        assert_eq!(FallingPiece::spawn(Z).pos, Pos::from((3, 20, Rot::N)));
     }
 
     #[test]
@@ -282,24 +285,24 @@ mod test {
     #[test]
     fn test_sonic_drop() {
         let mat = Mat::empty();
-        let mut pc = Piece::spawn(T);
-        assert_eq!(pc.pos, (3, 20, Rot::N));
-        let (dy, cells) = pc.sonic_drop(mat);
+        let mut fp = FallingPiece::spawn(T);
+        assert_eq!(fp.pos, (3, 20, Rot::N));
+        let (dy, cells) = fp.sonic_drop(mat);
         assert_eq!(dy, 19);
-        assert_eq!(pc.pos, (3, 1, Rot::N));
-        assert_eq!(pc.cells(), cells);
-        let (dy, cells) = pc.sonic_drop(mat);
+        assert_eq!(fp.pos, (3, 1, Rot::N));
+        assert_eq!(fp.cells(), cells);
+        let (dy, cells) = fp.sonic_drop(mat);
         assert_eq!(dy, 0);
-        assert_eq!(pc.pos, (3, 1, Rot::N));
-        assert_eq!(pc.cells(), cells);
+        assert_eq!(fp.pos, (3, 1, Rot::N));
+        assert_eq!(fp.cells(), cells);
     }
 
     #[test]
     fn test_t_wall_kick() {
         let mat = Mat::empty();
-        let mut pc = Piece::new(T, (3, 1, Rot::N));
-        let cells = pc.try_rotate(mat, Turn::Cw).expect("turn(Cw)");
-        assert_eq!(pc.cells(), cells);
-        assert_eq!(pc.pos, (2, 2, Rot::E));
+        let mut fp = FallingPiece::new(T, (3, 1, Rot::N));
+        let cells = fp.try_rotate(mat, Turn::Cw).expect("turn(Cw)");
+        assert_eq!(fp.cells(), cells);
+        assert_eq!(fp.pos, (2, 2, Rot::E));
     }
 }

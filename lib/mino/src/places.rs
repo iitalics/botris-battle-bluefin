@@ -5,7 +5,7 @@ use core::{cmp, ops};
 
 use crate::input::{Dir, Input, Turn};
 use crate::matrix::Mat;
-use crate::piece::{Cells, Piece, Pos, Shape, Spawn, WallKicks};
+use crate::piece::{Cells, FallingPiece, Pos, Shape, Spawn, WallKicks};
 
 type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AHasher>>;
 
@@ -14,18 +14,18 @@ type HashSet<T> = hashbrown::HashSet<T, core::hash::BuildHasherDefault<ahash::AH
 /// Returns an iterator that yields all of the reachable places on `matrix` from piece
 /// `piece_type`, starting at its spawn location. If the spawn location is blocked then
 /// this will be empty (or you can check with `is_dead`).
-pub fn places<T: Shape + Clone + Spawn>(matrix: &Mat, piece_type: T) -> Places<'_, T> {
+pub fn places<T: Shape + Clone + Spawn>(matrix: &Mat, piece: T) -> Places<'_, T> {
     let mut places = Places {
         matrix,
-        piece_type: piece_type.clone(),
+        piece: piece.clone(),
         stack: Vec::with_capacity(64),
         visited: HashSet::with_capacity(256),
     };
 
-    let spawn_piece = Piece::spawn(piece_type);
-    if !spawn_piece.cells().collides(matrix) {
+    let spawn_fp = FallingPiece::spawn(piece);
+    if !spawn_fp.cells().collides(matrix) {
         // if this is not true, then we are dead
-        places.push(spawn_piece.pos);
+        places.push(spawn_fp.pos);
     }
 
     places
@@ -34,7 +34,7 @@ pub fn places<T: Shape + Clone + Spawn>(matrix: &Mat, piece_type: T) -> Places<'
 #[derive(Clone)]
 pub struct Places<'m, T: Shape + Clone> {
     matrix: &'m Mat,
-    piece_type: T,
+    piece: T,
     stack: Vec<Pos>,
     visited: HashSet<Pos>,
 }
@@ -53,8 +53,8 @@ impl<T: Shape + Clone> Places<'_, T> {
         true
     }
 
-    fn pop(&mut self) -> Option<Piece<T>> {
-        Some(Piece::new(self.piece_type.clone(), self.stack.pop()?))
+    fn pop(&mut self) -> Option<FallingPiece<T>> {
+        Some(FallingPiece::new(self.piece.clone(), self.stack.pop()?))
     }
 }
 
@@ -62,20 +62,20 @@ impl<T: Shape + Clone> Places<'_, T> {
 /// location is immobile.
 #[derive(Copy, Clone, Debug)]
 pub struct PlacesResult<T> {
-    pub piece: Piece<T>,
+    pub falling_piece: FallingPiece<T>,
     pub cells: Cells,
 }
 
-impl<T> From<PlacesResult<T>> for Piece<T> {
+impl<T> From<PlacesResult<T>> for FallingPiece<T> {
     fn from(r: PlacesResult<T>) -> Self {
-        r.piece
+        r.falling_piece
     }
 }
 
 impl<T> ops::Deref for PlacesResult<T> {
-    type Target = Piece<T>;
+    type Target = FallingPiece<T>;
     fn deref(&self) -> &Self::Target {
-        &self.piece
+        &self.falling_piece
     }
 }
 
@@ -118,7 +118,10 @@ impl<T: Shape + Clone + WallKicks> Iterator for Places<'_, T> {
                 continue;
             }
 
-            return Some(PlacesResult { piece, cells });
+            return Some(PlacesResult {
+                falling_piece: piece,
+                cells,
+            });
         }
     }
 }
@@ -224,12 +227,12 @@ mod test {
 ///
 /// The input sequence does *not* include the `SonicDrop` that would place it on the
 /// ground; it is implied that this would be accomplished by a hard drop always performed.
-pub fn reach<T>(matrix: &Mat, target: Piece<T>) -> Option<Vec<Input>>
+pub fn reach<T>(matrix: &Mat, target: FallingPiece<T>) -> Option<Vec<Input>>
 where
     T: Shape + Spawn + WallKicks + Clone,
 {
     let target_cells = target.cells();
-    ShortestPath::new(matrix, target.shape)
+    ShortestPath::new(matrix, target.piece)
         .find(|(cells, _)| *cells == target_cells)
         .map(|(_, node)| node.inputs())
 }
@@ -245,7 +248,7 @@ struct ShortestPath<'m, T: Shape + Clone> {
 
 impl<'m, T: Shape + Spawn + Clone> ShortestPath<'m, T> {
     fn new(matrix: &'m Mat, piece_type: T) -> Self {
-        let spawn_piece = Piece::spawn(piece_type.clone());
+        let spawn_piece = FallingPiece::spawn(piece_type.clone());
         let root = ShortestPathNode::new_root(spawn_piece.pos);
         Self {
             matrix,
@@ -269,7 +272,7 @@ impl<T: Shape + WallKicks + Clone> Iterator for ShortestPath<'_, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let node = self.unvisited.pop()?;
-        let piece = Piece::new(self.piece_type.clone(), node.pos);
+        let piece = FallingPiece::new(self.piece_type.clone(), node.pos);
 
         let mut cw = piece.clone();
         if cw.try_rotate(self.matrix, Turn::Cw).is_some() {
@@ -408,7 +411,7 @@ mod test_reach {
     #[test]
     fn test_reach_simple() {
         let mat = Mat::empty();
-        let tgt = Piece::new(standard_rules::T, (0, 1, Rot::N));
+        let tgt = FallingPiece::new(standard_rules::T, (0, 1, Rot::N));
         let inputs = reach(mat, tgt).unwrap();
         assert_eq!(inputs, {
             use Input::*;
@@ -419,7 +422,7 @@ mod test_reach {
     #[test]
     fn test_reach_simple_rotate() {
         let mat = Mat::empty();
-        let tgt = Piece::new(standard_rules::T, (-1, 2, Rot::E));
+        let tgt = FallingPiece::new(standard_rules::T, (-1, 2, Rot::E));
         let inputs = reach(mat, tgt).unwrap();
         assert_eq!(inputs, {
             use Input::*;
@@ -435,7 +438,7 @@ mod test_reach {
         //   0123456789
         mat.set(0, 0b1111001111);
         mat.set(1, 0b1110011111);
-        let tgt = Piece::new(standard_rules::S, (4, 2, Rot::S));
+        let tgt = FallingPiece::new(standard_rules::S, (4, 2, Rot::S));
         let inputs = reach(&mat, tgt).unwrap();
         assert_eq!(inputs, {
             use Input::*;

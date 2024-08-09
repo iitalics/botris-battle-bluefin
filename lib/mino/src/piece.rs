@@ -43,24 +43,22 @@ impl fmt::Debug for Pos {
 
 /// Represents the state of a piece (its shape and position).
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Piece<T> {
-    pub shape: T,
+pub struct FallingPiece<T> {
+    pub piece: T,
     pub pos: Pos,
 }
 
-impl<T> Piece<T> {
-    pub fn new(shape: T, pos: impl Into<Pos>) -> Self {
-        Self {
-            shape,
-            pos: pos.into(),
-        }
+impl<T> FallingPiece<T> {
+    pub fn new(piece: T, pos: impl Into<Pos>) -> Self {
+        let pos = pos.into();
+        Self { piece, pos }
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Piece<T> {
+impl<T: fmt::Debug> fmt::Debug for FallingPiece<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Piece")
-            .field(&self.shape)
+            .field(&self.piece)
             .field(&self.pos.x)
             .field(&self.pos.y)
             .field(&self.pos.r)
@@ -73,7 +71,7 @@ pub trait Spawn {
     fn spawn(&self) -> (i8, i8);
 }
 
-impl<T: Spawn> Piece<T> {
+impl<T: Spawn> FallingPiece<T> {
     pub fn spawn(shape: T) -> Self {
         let pos = shape.spawn();
         Self::new(shape, pos)
@@ -239,10 +237,10 @@ impl fmt::Debug for Cells {
     }
 }
 
-impl<T: Shape> Piece<T> {
+impl<T: Shape> FallingPiece<T> {
     /// Get the cells occupied by the piece.
     pub fn cells(&self) -> Cells {
-        self.shape.cells(self.pos.r).offset(self.pos.x, self.pos.y)
+        self.piece.cells(self.pos.r).offset(self.pos.x, self.pos.y)
     }
 
     /// Try to move in the given direction. If there is no collision, returns
@@ -252,7 +250,7 @@ impl<T: Shape> Piece<T> {
         let r = self.pos.r;
         let x = self.pos.x + dx;
         let y = self.pos.y;
-        let cells = self.shape.cells(r).offset(x, y);
+        let cells = self.piece.cells(r).offset(x, y);
 
         if !cells.collides(mat) {
             self.pos.x = x;
@@ -273,9 +271,9 @@ impl<T: Shape> Piece<T> {
         let r = self.pos.r + dr;
         let x = self.pos.x;
         let y = self.pos.y;
-        let cells = self.shape.cells(r).offset(x, y);
+        let cells = self.piece.cells(r).offset(x, y);
 
-        for &(dx, dy) in self.shape.wall_kicks(r0, dr) {
+        for &(dx, dy) in self.piece.wall_kicks(r0, dr) {
             let cells = cells.offset(dx, dy);
             if !cells.collides(mat) {
                 self.pos.x += dx;

@@ -8,15 +8,15 @@ use std::{cmp, mem, time};
 use mino::input::Input;
 use mino::matrix::{Mat, MatBuf};
 use mino::places::{places, reach};
-use mino::standard_rules::{Piece, PieceType, Queue};
+use mino::standard_rules::{FallingPiece, Piece, Queue};
 
 const K: usize = 1024;
 const M: usize = 1024 * K;
 
 pub fn bot(
-    current: PieceType,
-    queue: &[PieceType],
-    hold: Option<PieceType>,
+    current: Piece,
+    queue: &[Piece],
+    hold: Option<Piece>,
     matrix: &Mat,
     // b2b: bool,
     // ren: u32,
@@ -25,7 +25,7 @@ pub fn bot(
     let t0 = time::Instant::now();
     let max_time = time::Duration::from_millis(150);
 
-    let combined_queue_pieces: Vec<PieceType> = [hold.as_slice(), &[current], queue]
+    let combined_queue_pieces: Vec<Piece> = [hold.as_slice(), &[current], queue]
         .into_iter()
         .flat_map(|x| x.iter().copied())
         .collect();
@@ -104,7 +104,7 @@ pub fn bot(
     let target = target?;
     debug!("  -> {:?}", target);
 
-    let hold = target.shape != current;
+    let hold = target.piece != current;
     let reach_inputs = reach(matrix, target)?;
     Some((hold, reach_inputs))
 }
@@ -114,7 +114,7 @@ struct Node<'a> {
     queue: Queue<'a>,
     depth: i32,
     score: i32,
-    parent: Option<(&'a Node<'a>, Piece)>,
+    parent: Option<(&'a Node<'a>, FallingPiece)>,
     children: Cell<&'a [&'a Node<'a>]>,
 }
 
@@ -140,17 +140,17 @@ impl<'a> Node<'a> {
         let mut children = vec![];
         let mut new_matrix = MatBuf::new();
 
-        for (ty, queue) in self.queue.pop() {
-            for pc in places(self.matrix, ty) {
+        for (pc, queue) in self.queue.pop() {
+            for fp in places(self.matrix, pc) {
                 // let is_spin = pc.cells.immobile(self.matrix);
                 new_matrix.copy_from(self.matrix);
-                pc.cells.place(&mut new_matrix);
-                let cleared = new_matrix.clear_lines(pc.cells.bottom());
+                fp.cells.place(&mut new_matrix);
+                let cleared = new_matrix.clear_lines(fp.cells.bottom());
 
                 // TODO: dedup
                 let matrix = copy_matrix(alo, &new_matrix);
                 let depth = self.depth + 1;
-                let parent = Some((self, pc.into()));
+                let parent = Some((self, fp.into()));
                 let score = evaluate(matrix, depth, cleared);
                 children.push(alo.alloc_with(|| Node {
                     matrix,

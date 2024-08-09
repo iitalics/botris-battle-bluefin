@@ -178,7 +178,7 @@ async fn main() -> Result<()> {
                 );
 
                 let result = {
-                    fn mino_piece_type(pc: botris::Piece) -> mino::standard_rules::PieceType {
+                    fn mino_piece_type(pc: botris::Piece) -> mino::standard_rules::Piece {
                         match pc {
                             botris::Piece::I => mino::standard_rules::I,
                             botris::Piece::J => mino::standard_rules::J,
