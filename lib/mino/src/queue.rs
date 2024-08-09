@@ -1,5 +1,7 @@
 //! Data structures for queue manipulation.
 
+use core::{fmt, mem};
+
 /// Represents the upcoming pieces in the queue, incl. held piece.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Queue<'a, T> {
@@ -54,6 +56,28 @@ impl<'a, T: Copy, const N: usize> From<&'a [T; N]> for Queue<'a, T> {
     }
 }
 
+impl<T: fmt::Display> fmt::Display for Queue<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (hold, curr, next) = match &self.next {
+            [front, back @ ..] => (self.hold.as_ref(), Some(front), back),
+            [] => (None, self.hold.as_ref(), &[][..]),
+        };
+        f.write_str("[")?;
+        if let Some(x) = hold {
+            x.fmt(f)?;
+        }
+        f.write_str("](")?;
+        if let Some(x) = curr {
+            x.fmt(f)?;
+        }
+        f.write_str(")")?;
+        for x in next {
+            x.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
 pub struct Pop<'a, T: Copy> {
     did_hold: bool,
     curr: Option<T>,
@@ -70,7 +94,7 @@ impl<'a, T: Copy> Iterator for Pop<'a, T> {
             self.curr = None;
         } else {
             self.did_hold = true;
-            core::mem::swap(&mut self.curr, &mut self.succ.hold);
+            mem::swap(&mut self.curr, &mut self.succ.hold);
         }
         Some((curr, succ))
     }

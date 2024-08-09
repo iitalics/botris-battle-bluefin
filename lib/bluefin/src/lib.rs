@@ -31,7 +31,7 @@ pub fn bot(
         .collect();
     let queue = Queue::from(&*combined_queue_pieces);
 
-    debug!("start {:?}", queue);
+    debug!("start {}", queue);
 
     let alo = Alo::with_capacity(16 * M);
 
