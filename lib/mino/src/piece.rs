@@ -135,6 +135,10 @@ impl Cells {
         (self.x0..self.x1, self.y0..self.y1)
     }
 
+    pub fn bottom(&self) -> i8 {
+        self.y0
+    }
+
     /// Returns the list of coordinates occupied by the cells. This is not particularly
     /// efficient so should be used only for tests.
     pub fn coords(&self) -> impl Iterator<Item = (i8, i8)> {
@@ -292,7 +296,7 @@ impl<T: Shape> Piece<T> {
         let cells = self.cells();
 
         // immediately drop to the top of the matrix if the piece is above it
-        let y0 = cells.extents().1.start;
+        let y0 = cells.bottom();
         let y_top = mat.len();
         if y0 > y_top {
             dy = y_top - y0;
