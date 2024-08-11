@@ -3,7 +3,7 @@ extern crate tracing;
 
 use bumpalo::Bump as Alo;
 use std::cell::Cell;
-use std::{cmp, mem, time};
+use std::{cmp, mem};
 
 use mino::input::Input;
 use mino::matrix::{Mat, MatBuf};
@@ -22,9 +22,6 @@ pub fn bot(
     // ren: u32,
     // jeopardy: [u32; 2],
 ) -> Option<(bool, Vec<Input>)> {
-    let t0 = time::Instant::now();
-    let max_time = time::Duration::from_millis(150);
-
     let combined_queue_pieces: Vec<Piece> = [hold.as_slice(), &[current], queue]
         .into_iter()
         .flat_map(|x| x.iter().copied())
@@ -33,20 +30,21 @@ pub fn bot(
 
     debug!("start {}", queue);
 
-    let alo = Alo::with_capacity(16 * M);
+    let alo = Alo::with_capacity(4 * M);
 
     let root = Node::alloc_root(&alo, matrix, queue);
-    let mut best = root;
 
-    let mut beam_width = 16;
     let mut beam = Vec::with_capacity(8 * K);
     let mut next_beam = Vec::with_capacity(8 * K);
-
     let mut total_expanded = 1;
-    let mut best_expanded = 1;
 
-    while t0.elapsed() < max_time {
-        trace!(beam_width, best = best.score);
+    let mut best = root;
+    let mut best_expanded = 1;
+    let mut best_generation = 0;
+
+    for gen in 0..5 {
+        let beam_width = 1 << (4 + gen); // 16, 32, 64, 128, 256
+        trace!(gen, beam_width, best = best.score);
         beam.clear();
         beam.push(root);
 
@@ -65,6 +63,7 @@ pub fn bot(
                     trace!(new_best = node.score);
                     best = node;
                     best_expanded = total_expanded;
+                    best_generation = gen;
                 }
 
                 if node.children.get().is_empty() {
@@ -87,11 +86,10 @@ pub fn bot(
             expanded = 0;
             not_expanded = 0;
         }
-
-        beam_width *= 2;
     }
 
-    info!(best = best.score, total_expanded, best_expanded, beam_width);
+    info!(best = best.score, total_expanded, best_expanded, best_generation);
+    debug!(alo_kb = alo.allocated_bytes() / 1024);
 
     let mut target = None;
     while let Some((parent, edge)) = best.parent {
@@ -99,10 +97,8 @@ pub fn bot(
         best = parent;
     }
 
-    debug!(alo_kb = alo.allocated_bytes() / 1024);
-
     let target = target?;
-    debug!("  -> {:?}", target);
+    trace!(?target);
 
     let hold = target.piece != current;
     let reach_inputs = reach(matrix, target)?;
