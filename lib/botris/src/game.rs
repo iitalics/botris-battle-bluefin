@@ -443,11 +443,13 @@ impl Game {
 
     // TODO: return list of attacks
     pub fn perform_commands(&mut self, cmds: &[Command]) {
-        for &cmd in cmds.iter().chain([&Command::HardDrop]) {
+        for &cmd in cmds.iter() {
             if !self.perform_command(cmd) {
                 warn!("command blocked: {cmd:?} ({:?})", self.current);
             }
         }
+
+        self.perform_command(Command::HardDrop);
     }
 
     pub fn perform_command(&mut self, cmd: Command) -> bool {
@@ -457,7 +459,7 @@ impl Game {
             Command::Drop => self.state.current.try_offset((-1, 0), &self.state.board),
             Command::RotateCw => self.state.current.try_rotate_cw(&self.state.board),
             Command::RotateCcw => self.state.current.try_rotate_ccw(&self.state.board),
-            Command::SonicDrop => self.state.current.sonic_drop(&self.state.board) > 0,
+            Command::SonicDrop => self.state.current.sonic_drop(&self.state.board) != 0,
 
             Command::Hold => {
                 if !self.can_hold {
@@ -466,8 +468,6 @@ impl Game {
 
                 if let Some(held) = self.state.held {
                     self.state.queue.push_front(held);
-                } else if self.state.queue.is_empty() {
-                    return false;
                 }
 
                 self.state.held = Some(self.state.current.piece);
@@ -479,6 +479,7 @@ impl Game {
             Command::HardDrop => {
                 self.state.current.sonic_drop(&self.state.board);
                 let immobile = self.state.board.check_immobile(self.state.current);
+                debug!(piece = ?self.current, "lock in");
                 self.state.board.place_piece(self.current);
                 let cleared = self.state.board.clear_lines();
 
@@ -491,10 +492,21 @@ impl Game {
 
                 /* TODO: apply multiplier to score */
 
-                let (_cancel, _attack) = self.cancel_garbage(score);
+                debug!(
+                    cleared,
+                    immobile,
+                    score,
+                    b2b = self.b2b,
+                    combo = self.combo,
+                    "hard drop"
+                );
 
                 self.state.score += score;
                 self.state.pieces_placed += 1;
+
+                let (_cancel, _attack) = self.cancel_garbage(score);
+                self.tank_garbage();
+                self.spawn_piece();
                 true
             }
         }
@@ -520,6 +532,10 @@ impl Game {
         let cancel = self.garbage_queued.len().min(attack as usize);
         self.state.garbage_queued.drain(..cancel);
         (cancel as u32, attack - cancel as u32)
+    }
+
+    fn tank_garbage(&mut self) {
+        // ...
     }
 }
 
