@@ -31,12 +31,9 @@ impl Board {
     }
 
     pub fn check_immobile(&self, piece_data: PieceData) -> bool {
-        for ofs in [(0, -1), (0, 1), (-1, 0), (1, 0)] {
-            if self.check_collision(piece_data.offset(ofs)) {
-                return true;
-            }
-        }
-        false
+        [(0, -1), (0, 1), (-1, 0), (1, 0)]
+            .iter()
+            .all(|&ofs| self.check_collision(piece_data.offset(ofs)))
     }
 
     pub fn place_piece(&mut self, piece_data: PieceData) {
