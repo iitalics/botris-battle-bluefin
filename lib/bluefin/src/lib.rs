@@ -88,8 +88,8 @@ pub fn bot(
         }
     }
 
-    info!(best = best.score, total_expanded, best_expanded, best_generation);
-    debug!(alo_kb = alo.allocated_bytes() / 1024);
+    debug!(best = best.score, total_expanded, best_expanded, best_generation);
+    trace!(alo_kb = alo.allocated_bytes() / 1024);
 
     let mut target = None;
     while let Some((parent, edge)) = best.parent {
@@ -98,7 +98,7 @@ pub fn bot(
     }
 
     let target = target?;
-    trace!(?target);
+    debug!(?target);
 
     let hold = target.piece != current;
     let reach_inputs = reach(matrix, target)?;
