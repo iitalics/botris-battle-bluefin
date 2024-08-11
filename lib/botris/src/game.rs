@@ -43,6 +43,24 @@ impl Board {
         let block = Some(piece_data.piece.into());
         piece_data.coords().for_each(|xy| self[xy] = block);
     }
+
+    pub fn clear_lines(&mut self) -> i8 {
+        let mut cleared = 0;
+        let rows = &mut self.0;
+        let mut y_dst = 0;
+        for y in 0..rows.len() {
+            let is_full = !rows[y].contains(&None);
+            //let is_garbage = rows[y].contains(&Some(NonEmptyBlock::G));
+            if is_full {
+                cleared += 1;
+            } else {
+                rows.swap(y_dst, y);
+                y_dst += 1;
+            }
+        }
+        rows.truncate(y_dst);
+        cleared
+    }
 }
 
 impl std::ops::Index<(i8, i8)> for Board {
@@ -183,12 +201,12 @@ pub enum Piece {
     T = 7,
 }
 
-impl Piece {
-    pub fn all() -> [Piece; 7] {
-        use Piece::*;
-        [I, O, J, L, S, Z, T]
-    }
+pub static ALL_PIECES: [Piece; 7] = {
+    use Piece::*;
+    [I, O, J, L, S, Z, T]
+};
 
+impl Piece {
     pub fn name(self) -> &'static str {
         BLOCK_NAMES[self as usize]
     }
@@ -349,7 +367,7 @@ impl std::fmt::Display for Rotation {
 pub struct GameState {
     pub board: Board,
     pub queue: Queue,
-    pub garbage_queued: Vec<GarbageLine>,
+    pub garbage_queued: VecDeque<GarbageLine>,
     pub held: Option<Piece>,
     pub current: PieceData,
     pub can_hold: bool,
@@ -408,7 +426,7 @@ impl Game {
             state: GameState {
                 board: Board::new(),
                 queue: Queue::with_capacity(6),
-                garbage_queued: vec![],
+                garbage_queued: VecDeque::new(),
                 held: None,
                 current: PieceData::spawn(Piece::O),
                 can_hold: true,
@@ -422,12 +440,20 @@ impl Game {
             bag: Vec::with_capacity(7),
         };
 
-        this.fill_queue();
         this.spawn_piece();
         this
     }
 
-    pub fn run(&mut self, cmd: Command) -> bool {
+    // TODO: return list of attacks
+    pub fn perform_commands(&mut self, cmds: &[Command]) {
+        for &cmd in cmds.iter().chain([&Command::HardDrop]) {
+            if !self.perform_command(cmd) {
+                warn!("command blocked: {cmd:?} ({:?})", self.current);
+            }
+        }
+    }
+
+    pub fn perform_command(&mut self, cmd: Command) -> bool {
         match cmd {
             Command::MoveLeft => self.state.current.try_offset((-1, 0), &self.state.board),
             Command::MoveRight => self.state.current.try_offset((1, 0), &self.state.board),
@@ -455,11 +481,22 @@ impl Game {
 
             Command::HardDrop => {
                 self.state.current.sonic_drop(&self.state.board);
+                let immobile = self.state.board.check_immobile(self.state.current);
                 self.state.board.place_piece(self.current);
+                let cleared = self.state.board.clear_lines();
 
-                // TODO: line clears
-                // TODO: attack scoring
+                let score = calculate_score(
+                    cleared,
+                    immobile,
+                    &mut self.state.b2b,
+                    &mut self.state.combo,
+                );
 
+                /* TODO: apply multiplier to score */
+
+                let (_cancel, _attack) = self.cancel_garbage(score);
+
+                self.state.score += score;
                 self.state.pieces_placed += 1;
                 true
             }
@@ -467,23 +504,74 @@ impl Game {
     }
 
     fn spawn_piece(&mut self) {
-        if let Some(piece) = self.state.queue.pop_front() {
-            self.state.current = PieceData::spawn(piece);
-        }
-
-        self.state.dead = self.state.board.check_collision(self.state.current);
-        self.state.can_hold = true;
-    }
-
-    fn fill_queue(&mut self) {
-        while self.queue.len() < 6 {
+        while self.queue.len() < 7 {
             if self.bag.is_empty() {
-                self.bag.extend(Piece::all());
+                self.bag.extend_from_slice(&ALL_PIECES);
             }
-
             let i = self.rng.gen_range(0..self.bag.len());
             let pc = self.bag.swap_remove(i);
             self.state.queue.push_back(pc);
         }
+
+        let piece = self.state.queue.pop_front().unwrap();
+        self.state.current = PieceData::spawn(piece);
+        self.state.dead = self.state.board.check_collision(self.state.current);
+        self.state.can_hold = true;
     }
+
+    fn cancel_garbage(&mut self, attack: u32) -> (u32, u32) {
+        let cancel = self.garbage_queued.len().min(attack as usize);
+        self.state.garbage_queued.drain(..cancel);
+        (cancel as u32, attack - cancel as u32)
+    }
+}
+
+pub mod score {
+    pub const SINGLE: u32 = 0;
+    pub const DOUBLE: u32 = 1;
+    pub const TRIPLE: u32 = 2;
+    pub const QUAD: u32 = 4;
+    pub const SPIN_SINGLE: u32 = 2;
+    pub const SPIN_DOUBLE: u32 = 4;
+    pub const SPIN_TRIPLE: u32 = 6;
+    pub const B2B: u32 = 1;
+    pub const MAX_COMBO: usize = 9;
+    pub const COMBO: [u32; 1 + MAX_COMBO] = [0, 0, 1, 1, 1, 2, 2, 3, 3, 4];
+}
+
+fn calculate_score(cleared: i8, is_immobile: bool, b2b: &mut bool, combo: &mut u32) -> u32 {
+    if cleared == 0 {
+        *combo = 0;
+        return 0;
+    }
+
+    let mut score;
+    let b2b_clear;
+
+    if is_immobile {
+        match cleared {
+            1 => score = score::SPIN_SINGLE,
+            2 => score = score::SPIN_DOUBLE,
+            /* 3, 4 */ _ => score = score::SPIN_TRIPLE,
+        }
+        b2b_clear = true;
+    } else {
+        match cleared {
+            1 => score = score::SINGLE,
+            2 => score = score::DOUBLE,
+            3 => score = score::TRIPLE,
+            /* 4 */ _ => score = score::QUAD,
+        }
+        b2b_clear = cleared >= 4;
+    }
+
+    if b2b_clear && *b2b {
+        score += score::B2B;
+    }
+    *b2b = b2b_clear;
+
+    score += score::COMBO[*combo as usize];
+    *combo = (*combo + 1).min(score::MAX_COMBO as u32);
+
+    score
 }
