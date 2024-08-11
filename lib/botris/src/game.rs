@@ -1,9 +1,9 @@
 //! Tetris implementation for Botris.
 
-use std::collections::VecDeque;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(transparent)]
@@ -20,6 +20,10 @@ impl Board {
 
     pub fn len(&self) -> i8 {
         self.rows().len() as i8
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows().is_empty()
     }
 
     pub fn check_collision(&self, piece_data: PieceData) -> bool {
@@ -44,19 +48,19 @@ impl Board {
 impl std::ops::Index<(i8, i8)> for Board {
     type Output = Block;
     fn index(&self, (x, y): (i8, i8)) -> &Block {
-        if x < 0 || x >= 10 || y < 0 {
+        if !(0..10).contains(&x) || y < 0 {
             return &Some(NonEmptyBlock::G);
         }
-        match self.rows().get(y as usize) {
-            Some(row) => &row[x as usize],
-            None => &None,
+        if y >= self.len() {
+            return &None;
         }
+        &self.rows()[y as usize][x as usize]
     }
 }
 
 impl std::ops::IndexMut<(i8, i8)> for Board {
     fn index_mut(&mut self, (x, y): (i8, i8)) -> &mut Block {
-        if x < 0 || x >= 10 || y < 0 {
+        if !(0..10).contains(&x) || y < 0 {
             panic!("board index out of bounds");
         }
         let x = x as usize;
@@ -246,7 +250,7 @@ impl std::fmt::Display for Piece {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum NonEmptyBlock {
     I = 1,
@@ -256,18 +260,13 @@ pub enum NonEmptyBlock {
     S = 5,
     Z = 6,
     T = 7,
+    #[default]
     G = 8,
 }
 
 impl NonEmptyBlock {
     pub fn name(self) -> &'static str {
         BLOCK_NAMES[self as usize]
-    }
-}
-
-impl Default for NonEmptyBlock {
-    fn default() -> Self {
-        NonEmptyBlock::G
     }
 }
 
