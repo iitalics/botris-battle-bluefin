@@ -6,11 +6,12 @@ extern crate tracing;
 use anyhow::{Context, Result};
 use clap::Parser;
 use futures::{SinkExt as _, StreamExt as _};
+use std::time::{Duration, SystemTime};
 use tokio_tungstenite::connect_async as ws_connect_async;
 use tokio_tungstenite::tungstenite;
 use tungstenite::http::Uri;
 
-use botris::api::{ClientMessage, Message, RoomData, SessionId, UnknownMessage};
+use botris::api::{ClientMessage, Message, UnknownMessage};
 use botris::game::Command;
 
 /// Botris API example.
@@ -32,8 +33,6 @@ async fn main() -> Result<()> {
         .compact()
         .init();
 
-    debug!("hello");
-
     let mut ws = {
         let Args { room_key, token } = Args::parse();
 
@@ -45,15 +44,16 @@ async fn main() -> Result<()> {
         ws
     };
 
-    let mut preauth_room_data = None;
-    let mut preauth_session_id = None;
-    let mut session = None;
+    let mut the_session_id = None;
+    let mut the_room_data = None;
+
+    let mut round_start_time = SystemTime::UNIX_EPOCH;
+    let mut round_request_count = 0;
 
     while let Some(ws_msg) = ws.next().await {
         let ws_msg = ws_msg.context("read error")?;
 
         if !ws_msg.is_text() {
-            debug!("{ws_msg:?}");
             if ws_msg.is_close() {
                 if let Ok(reason) = ws_msg.to_text() {
                     error!("closed: {reason:?}");
@@ -62,90 +62,70 @@ async fn main() -> Result<()> {
                 }
                 break;
             }
+
+            debug!("{ws_msg:?}");
+            // if ws_msg.is_ping() {...}
             continue;
         }
 
         let ws_msg = ws_msg.to_text().unwrap();
         let msg = ws_msg
             .parse::<Message>()
-            .with_context(|| format!("{ws_msg:?}"))?;
+            .with_context(|| format!("original: {ws_msg}"))?;
 
-        if session.is_none() {
-            match &msg {
-                Message::RoomData { room_data } => {
-                    preauth_room_data = Some(room_data.clone());
-                }
-                Message::Authenticated { session_id } => {
-                    preauth_session_id = Some(session_id.clone());
-                }
-                _ => {
-                    trace!("{msg:?}");
-                    if enabled!(tracing::Level::WARN) {
-                        if let Ok(msg) = ws_msg.parse::<UnknownMessage>() {
-                            warn!("got {:?} message but wasn't authenticated", msg.type_);
-                        }
-                    }
-                }
-            }
-
-            if preauth_room_data.is_some() && preauth_session_id.is_some() {
-                let room_data = preauth_room_data.take().unwrap();
-                let session_id = preauth_session_id.take().unwrap();
-                let new_session = Session::new(session_id, room_data);
-                info!("new session: {}", new_session.session_id);
-                session = Some(new_session);
-            }
-
-            continue;
-        }
-
-        let session = session.as_mut().unwrap();
         trace!("> {msg:?}");
 
         match msg {
-            Message::GameStarted => {
-                info!("game started");
+            Message::Authenticated { session_id } => {
+                info!("authenticated: {session_id}");
+                if let Some(prev) = the_session_id.replace(session_id) {
+                    let session_id = the_session_id.as_ref().unwrap();
+                    warn!("session id replaced, {prev} => {session_id}");
+                }
             }
 
-            Message::RoomData { .. } | Message::Authenticated { .. } => {
-                warn!("didn't expect 'room_data' or 'authenticated'");
-            }
-
-            Message::SettingsChanged { room_data } => {
-                info!("settings changed");
-                session.room_data = room_data;
-            }
-
-            Message::GameReset { room_data } => {
-                info!("game reset");
+            Message::RoomData { room_data }
+            | Message::SettingsChanged { room_data }
+            | Message::GameReset { room_data } => {
+                info!("room reset");
                 debug!("{room_data:?}");
-                session.room_data = room_data;
+                the_room_data = Some(room_data);
+            }
+
+            Message::GameStarted => {
+                let _the_session_id = the_session_id
+                    .as_ref()
+                    .context("game_started: not authenticated")?;
+
+                info!("game started");
             }
 
             Message::RoundStarted {
                 starts_at,
                 room_data,
             } => {
-                use std::time::{Duration, SystemTime};
+                let the_session_id = the_session_id
+                    .as_ref()
+                    .context("round_started: not authenticated")?;
 
                 let t0 = SystemTime::now();
                 let t1 = SystemTime::UNIX_EPOCH + Duration::from_millis(starts_at);
-
                 let dt = t1.duration_since(t0).map_or(0.0, |d| d.as_secs_f32());
                 info!("round starting in {dt:.3}");
                 debug!("{room_data:?}");
-                session.room_data = room_data;
 
-                let game_state = session.room_data.players.iter().find_map(|p| {
-                    if p.session_id == session.session_id {
-                        p.game_state.as_ref()
-                    } else {
-                        None
-                    }
-                });
+                round_start_time = t0;
+                round_request_count = 0;
 
-                if let Some(game_state) = game_state {
-                    debug!(
+                let room_data = the_room_data.insert(room_data);
+
+                if let Some(game_state) = room_data
+                    .players
+                    .iter()
+                    .find(|p| p.session_id == *the_session_id)
+                    .and_then(|p| p.game_state.as_ref())
+                {
+                    info!(
                         "> {:?} {:?} {:?}",
                         &game_state.current.piece, &game_state.held, &game_state.queue
                     );
@@ -155,7 +135,11 @@ async fn main() -> Result<()> {
             }
 
             Message::RoundOver { winner_id } => {
-                if winner_id == session.session_id {
+                let the_session_id = the_session_id
+                    .as_ref()
+                    .context("round_over: not authenticated")?;
+
+                if winner_id == *the_session_id {
                     info!("round over: i won");
                 } else {
                     info!("round over: i lost");
@@ -163,7 +147,11 @@ async fn main() -> Result<()> {
             }
 
             Message::GameOver { winner_id } => {
-                if winner_id == session.session_id {
+                let the_session_id = the_session_id
+                    .as_ref()
+                    .context("game_over: not authenticated")?;
+
+                if winner_id == *the_session_id {
                     info!("game over: i won");
                 } else {
                     info!("game over: i lost");
@@ -171,8 +159,16 @@ async fn main() -> Result<()> {
             }
 
             Message::RequestMove { game_state } => {
-                debug!("move requested");
-                debug!(
+                let _the_session_id = the_session_id
+                    .as_ref()
+                    .context("request_move: not authenticated")?;
+
+                round_request_count += 1;
+                let dt = round_start_time.elapsed().unwrap_or(Duration::ZERO);
+                let rps = round_request_count as f32 / dt.as_secs_f32();
+
+                info!("move requested ({rps:.1} r/s)");
+                info!(
                     "> {:?} {:?} {:?}",
                     game_state.current.piece, game_state.held, game_state.queue
                 );
@@ -241,7 +237,16 @@ async fn main() -> Result<()> {
                 commands,
                 game_state,
             } => {
-                debug!("{session_id}: {commands:?}, {game_state:?}");
+                let the_session_id = the_session_id
+                    .as_ref()
+                    .context("player_action: not authenticated")?;
+
+                trace!("{session_id}: {commands:?}, {game_state:?}");
+
+                if session_id == *the_session_id {
+                    info!("game state update via 'player_action'");
+                    debug!("{game_state:?}");
+                }
             }
 
             Message::PlayerDamageReceived {
@@ -249,7 +254,16 @@ async fn main() -> Result<()> {
                 damage,
                 game_state,
             } => {
-                debug!("{session_id}: damage {damage:?}, {game_state:?}");
+                let the_session_id = the_session_id
+                    .as_ref()
+                    .context("player_damage_received: not authenticated")?;
+
+                trace!("{session_id}: damage {damage:?}, {game_state:?}");
+
+                if session_id == *the_session_id {
+                    info!("game state update via 'player_damage_received'");
+                    debug!("{game_state:?}");
+                }
             }
 
             Message::HostChanged {}
@@ -275,19 +289,4 @@ async fn main() -> Result<()> {
     info!("bye");
 
     Ok(())
-}
-
-#[derive(Debug)]
-struct Session {
-    session_id: SessionId,
-    room_data: RoomData,
-}
-
-impl Session {
-    fn new(session_id: SessionId, room_data: RoomData) -> Self {
-        Self {
-            session_id,
-            room_data,
-        }
-    }
 }
