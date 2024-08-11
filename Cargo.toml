@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["lib/bluefin","lib/botris", "lib/mino"]
-exclude = ["example/botris-hello"]
+members = [ "lib/bluefin","lib/botris", "lib/mino" ]
+exclude = [ "example/botris-hello", "bin/solo-player" ]
