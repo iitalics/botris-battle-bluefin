@@ -1,5 +1,8 @@
 //! Tetris implementation for Botris.
 
+use std::collections::VecDeque;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -78,7 +81,7 @@ impl std::fmt::Debug for Board {
     }
 }
 
-pub type Queue = Vec<Piece>;
+pub type Queue = VecDeque<Piece>;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -177,6 +180,11 @@ pub enum Piece {
 }
 
 impl Piece {
+    pub fn all() -> [Piece; 7] {
+        use Piece::*;
+        [I, O, J, L, S, Z, T]
+    }
+
     pub fn name(self) -> &'static str {
         BLOCK_NAMES[self as usize]
     }
@@ -373,27 +381,110 @@ pub enum Command {
     HardDrop,
 }
 
-impl GameState {
-    pub fn play(&mut self, cmd: Command) -> bool {
+#[derive(Debug, Clone)]
+pub struct Game {
+    pub state: GameState,
+    rng: SmallRng,
+    bag: Vec<Piece>,
+}
+
+impl std::ops::Deref for Game {
+    type Target = GameState;
+    fn deref(&self) -> &Self::Target {
+        &self.state
+    }
+}
+
+impl Game {
+    pub fn new() -> Self {
+        Self::new_seeded(rand::thread_rng().gen())
+    }
+
+    pub fn new_seeded(s: u64) -> Self {
+        Self::with_rng(SmallRng::seed_from_u64(s))
+    }
+
+    fn with_rng(rng: SmallRng) -> Self {
+        let mut this = Game {
+            state: GameState {
+                board: Board::new(),
+                queue: Queue::with_capacity(6),
+                garbage_queued: vec![],
+                held: None,
+                current: PieceData::spawn(Piece::O),
+                can_hold: true,
+                combo: 0,
+                b2b: false,
+                score: 0,
+                pieces_placed: 0,
+                dead: false,
+            },
+            rng,
+            bag: Vec::with_capacity(7),
+        };
+
+        this.fill_queue();
+        this.spawn_piece();
+        this
+    }
+
+    pub fn run(&mut self, cmd: Command) -> bool {
         match cmd {
-            Command::MoveLeft => self.current.try_offset((-1, 0), &self.board),
-            Command::MoveRight => self.current.try_offset((1, 0), &self.board),
-            Command::Drop => self.current.try_offset((-1, 0), &self.board),
-            Command::RotateCw => self.current.try_rotate_cw(&self.board),
-            Command::RotateCcw => self.current.try_rotate_ccw(&self.board),
-            Command::SonicDrop => self.current.sonic_drop(&self.board) > 0,
+            Command::MoveLeft => self.state.current.try_offset((-1, 0), &self.state.board),
+            Command::MoveRight => self.state.current.try_offset((1, 0), &self.state.board),
+            Command::Drop => self.state.current.try_offset((-1, 0), &self.state.board),
+            Command::RotateCw => self.state.current.try_rotate_cw(&self.state.board),
+            Command::RotateCcw => self.state.current.try_rotate_ccw(&self.state.board),
+            Command::SonicDrop => self.state.current.sonic_drop(&self.state.board) > 0,
+
             Command::Hold => {
-                /* TODO */
-                self.can_hold
-            }
-            Command::HardDrop => {
-                self.current.sonic_drop(&self.board);
-                self.board.place_piece(self.current);
-                self.pieces_placed += 1;
-                // TODO: line clears
-                // TODO: attack scoring
+                if !self.can_hold {
+                    return false;
+                }
+
+                if let Some(held) = self.state.held {
+                    self.state.queue.push_front(held);
+                } else if self.state.queue.is_empty() {
+                    return false;
+                }
+
+                self.state.held = Some(self.state.current.piece);
+                self.spawn_piece();
+                self.state.can_hold = false;
                 true
             }
+
+            Command::HardDrop => {
+                self.state.current.sonic_drop(&self.state.board);
+                self.state.board.place_piece(self.current);
+
+                // TODO: line clears
+                // TODO: attack scoring
+
+                self.state.pieces_placed += 1;
+                true
+            }
+        }
+    }
+
+    fn spawn_piece(&mut self) {
+        if let Some(piece) = self.state.queue.pop_front() {
+            self.state.current = PieceData::spawn(piece);
+        }
+
+        self.state.dead = self.state.board.check_collision(self.state.current);
+        self.state.can_hold = true;
+    }
+
+    fn fill_queue(&mut self) {
+        while self.queue.len() < 6 {
+            if self.bag.is_empty() {
+                self.bag.extend(Piece::all());
+            }
+
+            let i = self.rng.gen_range(0..self.bag.len());
+            let pc = self.bag.swap_remove(i);
+            self.state.queue.push_back(pc);
         }
     }
 }
