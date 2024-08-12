@@ -49,19 +49,10 @@ fn main() -> Result<()> {
 }
 
 fn print_game_state(game: &GameState) {
-    println!("pieces: {}", game.pieces_placed);
-
-    let mut b2b = "";
-    let mut combo = "";
-    if game.b2b {
-        b2b = " (B2B)";
-    }
-    let combo_str;
-    if game.combo > 2 {
-        combo_str = format!(" ({} combo)", game.combo - 1);
-        combo = &combo_str;
-    }
-    println!("score: {}{}{}", game.score, b2b, combo);
+    let pcs = game.pieces_placed;
+    let atk = game.score;
+    let eff = if pcs > 0 { atk as f64 / pcs as f64 } else { 0.0 };
+    println!("pcs: {pcs}, atk: {atk}, eff: {eff:.3} app");
 
     let hold = game.held.map_or("", |pc| pc.name());
     let curr = game.current.piece.name();
