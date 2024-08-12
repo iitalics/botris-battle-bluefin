@@ -4,6 +4,8 @@ use alloc::vec::Vec;
 use core::mem::transmute;
 use core::ops::Deref;
 
+use crate::piece::Cells;
+
 /// Matrix representation. Represented as slice of `u16` per row, with individual bits
 /// containing column data.
 pub struct Mat([u16]);
@@ -90,6 +92,11 @@ impl MatBuf {
             }
             rows[y] |= bits;
         }
+    }
+
+    /// Places the cells onto the matrix by filling in the occupied coordinates.
+    pub fn place(&mut self, cells: Cells) {
+        cells.place(self)
     }
 
     /// Remove rows that are full above row `y_start`, moving any rows above them into
