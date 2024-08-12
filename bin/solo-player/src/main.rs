@@ -51,7 +51,11 @@ fn main() -> Result<()> {
 fn print_game_state(game: &GameState) {
     let pcs = game.pieces_placed;
     let atk = game.score;
-    let eff = if pcs > 0 { atk as f64 / pcs as f64 } else { 0.0 };
+    let eff = if pcs > 0 {
+        atk as f64 / pcs as f64
+    } else {
+        0.0
+    };
     println!("pcs: {pcs}, atk: {atk}, eff: {eff:.3} app");
 
     let hold = game.held.map_or("", |pc| pc.name());
