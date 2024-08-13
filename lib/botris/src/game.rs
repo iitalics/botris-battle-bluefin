@@ -388,6 +388,8 @@ pub enum Command {
     Hold,
     MoveLeft,
     MoveRight,
+    SonicLeft,
+    SonicRight,
     RotateCw,
     RotateCcw,
     Drop,
@@ -456,6 +458,14 @@ impl Game {
         match cmd {
             Command::MoveLeft => self.state.current.try_offset((-1, 0), &self.state.board),
             Command::MoveRight => self.state.current.try_offset((1, 0), &self.state.board),
+            Command::SonicLeft => {
+                while self.state.current.try_offset((-1, 0), &self.state.board) {}
+                true
+            }
+            Command::SonicRight => {
+                while self.state.current.try_offset((1, 0), &self.state.board) {}
+                true
+            }
             Command::Drop => self.state.current.try_offset((-1, 0), &self.state.board),
             Command::RotateCw => self.state.current.try_rotate_cw(&self.state.board),
             Command::RotateCcw => self.state.current.try_rotate_ccw(&self.state.board),
